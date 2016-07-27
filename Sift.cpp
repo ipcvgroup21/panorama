@@ -20,7 +20,7 @@ private:
 public:
 	void findKeypoints();
 	bool isExtremum(int octave, int interval, int row, int column);
-	Mat* interpolateExtrema(int octave, int interval, int row, int column);
+	Feature* interpolateExtrema(int octave, int interval, int row, int column);
 	bool isEdge(int octave, int interval, int row, int column);
 };
 
@@ -32,11 +32,11 @@ void Sift::findKeypoints() {
 	for (int c = SIFT_IMG_BORDER; c < dog_pyr[o * (intervals + 2) + i + 1].cols - SIFT_IMG_BORDER; c++) {
 		if (isExtremum(o, i, r, c)) {
 			if (interpolateExtrema(o, i, r, c) != NULL) {
-				// add feature
+				// TODO: add feature
 			}
 		}
 	}
-	// removeDuplicated
+	// TODO: remove duplicated features
 }
 
 // check its 26 neighbors in 3x3 regions at the current and adjacent scales
@@ -62,7 +62,7 @@ bool Sift::isExtremum(int octave, int interval, int row, int column) {
 }
 
 // interpolate extrema to sub-pixel accuracy
-Mat* Sift::interpolateExtrema(int octave, int interval, int row, int column){
+Feature* Sift::interpolateExtrema(int octave, int interval, int row, int column){
 	int i = 0;
 	int cur_interval = interval;
 	int cur_row = row;
@@ -149,7 +149,7 @@ Mat* Sift::interpolateExtrema(int octave, int interval, int row, int column){
 		return NULL;
 
 	if (!isEdge(octave, cur_interval, cur_row, cur_col)) {
-		// return feature;
+		//TODO: return feature
 	}
 }
 
