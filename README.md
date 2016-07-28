@@ -1,2 +1,2 @@
 # panorama
-OpenPano is an panorama stitching program written in C++ from scratch.
+Panorama stitching program written in C++ from scratch.
