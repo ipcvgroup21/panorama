@@ -31,18 +31,21 @@ static const float SIFT_CONTR_THR = 0.04f;
 static const float SIFT_CURV_THR = 10.f;
 
 /* Data struct of key point */
-struct Keypoint{
-	int octave;   /* the key point located octave */
-	int interval; /* the key point located layer in the octave */
-	int x; /* coordinate of the key point*/
-	int y;
-};
+typedef struct key_points{
+	double x;
+	double y;
+	int oct_id;
+	int scale_id;
+	double orientation;
+	std::vector<double> *v;
+}key_point;
+
 
 /* SITF features of an image.*/
 
 class SIFT{
 	private:
-		vector<Mat> DoGs; /* 1D array of DoG */
+		Mat* DoGs; /* 1D array of DoG */
 		int octave;  /* number of octaves */
 		int scale; 
 		//double sigma; 
@@ -50,6 +53,7 @@ class SIFT{
 
 	public:
 		SIFT(Mat& img, int octave, int scale, double sigma);
+		~SIFT(){delete[] DoGs;} 
 		
 
 	protected:
@@ -60,12 +64,12 @@ class SIFT{
 		void gaussianSmoothing(const Mat& src, Mat& dst, double sigma);
 		void substruction(const Mat& src1, const Mat& src2, Mat& dst);
 		vector<Mat> generateGaussianPyramid(Mat& src, int octaves, int scales, double sigma);
-		vector<Mat> generateDoGPyramid(vector<Mat>& gaussPyr, int octaves, int scales, double sigma);
-
-		void findKeypoints();
+		Mat* generateDoGPyramid(vector<Mat>& gaussPyr, int octaves, int scales, double sigma);
+		
+		vector<key_point> findKeypoints();
 		bool isExtremum(int octave, int interval, int row, int column);
-		Feature* interpolateExtrema(int octave, int interval, int row, int column);
-		bool isEdge(int octave, int interval, int row, int column);
+		key_point* interpolateExtrema(int octave, int interval, int row, int column);
+		bool isEdge(int octave, int interval, int row, int column);	
 };
 
 class GaussianMask{
@@ -75,6 +79,7 @@ class GaussianMask{
 		double sigma;
 	public:
 		GaussianMask(double sigma);
+		~GaussianMask(){delete [] fullMask; }
 		double* getFullMask(){ return fullMask;}
 		int getSize(){return maskSize;}
 };

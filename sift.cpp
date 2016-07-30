@@ -23,8 +23,7 @@ SIFT::SIFT(Mat& img,int octave, int scale, double sigma){
 	// Construct the scale space
 	vector<Mat> gauPyr = generateGaussianPyramid(img,octave,scale,sigma);
 	this->DoGs = generateDoGPyramid(gauPyr,octave,scale,sigma);
-	
-	cout << SIGMA;
+
 }
 
 /*************************************************
@@ -228,7 +227,7 @@ vector<Mat> SIFT::generateGaussianPyramid(Mat& src, int octaves, int scales, dou
 	
 	// Generate a list of series of sigma
 	double *sigmas = new double[intervalGaus];
-	sigmas[0] = sigma;
+	sigmas[0] = 1.0;
 	for(int i = 1; i < intervalGaus; i++){
 		sigmas[i] = sigmas[i - 1] * k;
 	}
@@ -236,25 +235,27 @@ vector<Mat> SIFT::generateGaussianPyramid(Mat& src, int octaves, int scales, dou
 	// Generate smoothing images in the first octave
 	for(int i = 0; i < intervalGaus; i++){
 		Mat smoothing;
-		//cout << sigmas[i] << endl;
-		gaussianSmoothing(initUpSampling,smoothing,sigmas[i]);
-		gaussPyr.insert(gaussPyr.end(),smoothing);
+		gaussianSmoothing(initUpSampling, smoothing, (sigmas[i] * sigma));
+		gaussPyr.insert(gaussPyr.end(), smoothing);
 	}
-	// Use down sample to generate the rest octave
+	// Use down sample to generate every first layer of rest octave 
+	// And then get smooth images base on it
 	vector<Mat>::iterator it;
 	for(int i = 1; i < octaves; i++){
-		int currentLayer = intervalGaus * i;
 		int prevLayer = intervalGaus * (i - 1);
-		for(int j = 0; j < intervalGaus; j++){
-			it = gaussPyr.begin() + prevLayer + j;
-			Mat gauss;
-			downSample(*it, gauss);
-			gaussPyr.insert(gaussPyr.end(),gauss);
-
+		it = gaussPyr.begin() + prevLayer;
+		Mat downSampling;
+		downSample(*it, downSampling);
+		gaussPyr.insert(gaussPyr.end(),downSampling);
+		for(int j = 1; j < intervalGaus; j++){
+			Mat dsmoothing;
+			gaussianSmoothing(downSampling, dsmoothing, sigmas[j]);
+			gaussPyr.insert(gaussPyr.end(), dsmoothing);
 		}
+
 	}
 	// Test:
-	/*int i;
+	/* int i;
 	for(it = gaussPyr.begin(), i = 0; it != gaussPyr.end(); it++, i++){
 		char buffer[20];
 		itoa(i,buffer,10);
@@ -262,7 +263,7 @@ vector<Mat> SIFT::generateGaussianPyramid(Mat& src, int octaves, int scales, dou
 		string name = "Image " + number;
 		namedWindow(name);  
 		imshow(name,*it);  
-	}*/
+	} */
 	return gaussPyr;
 }
 
@@ -277,10 +278,10 @@ Inputs:      // src, input gray image and its bit depth
 			 // sigma, the parameter of Gaussian
 Outputs:	 // 1D vector of DoG Pyramid
 **************************************************/ 
-vector<Mat> SIFT::generateDoGPyramid(vector<Mat>& gaussPyr, int octaves, int scales, double sigma){
+Mat* SIFT::generateDoGPyramid(vector<Mat>& gaussPyr, int octaves, int scales, double sigma){
 	int intervalDoGs = scale + 2;
 	int intervalGaus = scale + 3;
-	vector<Mat> dogPyr;
+	Mat* dogPyr = new Mat[this->octave * intervalDoGs];
 
 	vector<Mat>::iterator currIt;
 	vector<Mat>::iterator nextIt;
@@ -291,20 +292,22 @@ vector<Mat> SIFT::generateDoGPyramid(vector<Mat>& gaussPyr, int octaves, int sca
 			nextIt = gaussPyr.begin() + number + 1;
 			Mat subImg;
 			substruction(*nextIt, *currIt, subImg);
-			dogPyr.insert(dogPyr.end(), subImg);
+			dogPyr[i * intervalDoGs + j] = subImg;
+			//dogPyr.insert(dogPyr.end(), subImg);
 		}
 	}
 	
 	// Test:
-	/* int num;
-	for(currIt = dogPyr.begin(), num = 0; currIt != dogPyr.end(); currIt++, num++){
+	/*
+	for(int i = 0; i < this->octave * intervalDoGs; i++){
 		char buffer[20];
-		itoa(num,buffer,10);
+		itoa(i,buffer,10);
 		string number(buffer);
 		string name = "Image " + number;
 		namedWindow(name);  
-		imshow(name,*currIt);  
-	}  */
+		imshow(name,dogPyr[i]); 
+	}
+	*/
 	return dogPyr;
 }
 
@@ -346,93 +349,98 @@ GaussianMask::GaussianMask(double sigma){
 
 
  
-
-
-
 // detect features by finding extrema in DoG scale space
-void SIFT::findKeypoints() {
-	for (int o = 0; o < this->octave; o++)
-		for (int i = 0; i < intervals; i++)
-			for (int r = SIFT_IMG_BORDER; r < dog_pyr[o * (intervals + 2) + i + 1].rows - SIFT_IMG_BORDER; r++)
-				for (int c = SIFT_IMG_BORDER; c < dog_pyr[o * (intervals + 2) + i + 1].cols - SIFT_IMG_BORDER; c++) {
+vector<key_point> SIFT::findKeypoints() {
+	vector<key_point> keyPoints;
+	for (int o = 0; o < octave; o++)
+		for (int i = 0; i < scale; i++)
+			for (int r = SIFT_IMG_BORDER; r < DoGs[o * (scale + 2) + i + 1].rows - SIFT_IMG_BORDER; r++)
+				for (int c = SIFT_IMG_BORDER; c < DoGs[o * (scale + 2) + i + 1].cols - SIFT_IMG_BORDER; c++) {
 					if (isExtremum(o, i, r, c)) {
-						if (interpolateExtrema(o, i, r, c) != NULL) {
-							// TODO: add feature
+						key_point* kp = interpolateExtrema(o, i, r, c);
+						if (kp != NULL) {
+							key_point new_kp;
+							new_kp.x = kp->x;
+							new_kp.y = kp->y;
+							new_kp.oct_id = kp->oct_id;
+							new_kp.scale_id = kp->scale_id;
+							new_kp.orientation = kp->orientation;
+							new_kp.v = kp->v;
+							keyPoints.push_back(new_kp);
 						}
 					}
 				}
-				// TODO: remove duplicated features
+				return keyPoints;
 }
 
 // check its 26 neighbors in 3x3 regions at the current and adjacent scales
 // to find out if it's an extremum
-
 bool SIFT::isExtremum(int octave, int interval, int row, int column) {
 	bool maximum = true, minimum = true;
 
-	float cur_value = dog_pyr[octave * (intervals + 2) + interval + 1].at<float>(row, column);
+	float cur_value = DoGs[octave * (this->scale + 2) + interval + 1].at<float>(row, column);
 
 	// (for convenience the loop check include current pixel itself)
 	for (int i = interval - 1; i <= interval + 1; i++)
 		for (int r = row - 1; r <= row + 1; r++)
 			for (int c = column - 1; c <= column + 1; c++) {
-				// current image = dog_pyr[octave * (intervals + 2) + i + 1]
-				if (cur_value < dog_pyr[octave * (intervals + 2) + i + 1].at<float>(r, c))
+				// current image = DoGs[octave * (scale + 2) + i + 1]
+				if (cur_value < DoGs[octave * (scale + 2) + i + 1].at<float>(r, c))
 					maximum = false;
-				if (cur_value > dog_pyr[octave * (intervals + 2) + i + 1].at<float>(r, c))
+				if (cur_value > DoGs[octave * (scale + 2) + i + 1].at<float>(r, c))
 					minimum = false;
 				if (!maximum && !minimum)
 					return false;
 			}
 			return true;
 }
- 
-// interpolate extrema to sub-pixel accuracy
 
-Feature* SIFT::interpolateExtrema(int octave, int interval, int row, int column){
+// interpolate extrema to sub-pixel accuracy
+key_point* SIFT::interpolateExtrema(int octave, int interval, int row, int column){
 	int i = 0;
 	int cur_interval = interval;
 	int cur_row = row;
 	int cur_col = column;
 	Vec3f dD;
 	Vec3f offset;
+	double offset_c, offset_r, offset_i;
 	while (i < SIFT_MAX_INTERP_STEPS) {
-		int layer_index = octave * (intervals + 2) + cur_interval + 1;
+		int layer_index = octave * (scale + 2) + cur_interval + 1;
 
 		// first derivative
-		float dx = (dog_pyr[layer_index].at<float>(cur_row, cur_col + 1) -
-			dog_pyr[layer_index].at<float>(cur_row, cur_col - 1)) / 2;
-		float dy = (dog_pyr[layer_index].at<float>(cur_row + 1, cur_col) -
-			dog_pyr[layer_index].at<float>(cur_row - 1, cur_col)) / 2;
-		float ds = (dog_pyr[layer_index + 1].at<float>(cur_row, cur_col) -
-			dog_pyr[layer_index - 1].at<float>(cur_row, cur_col)) / 2;
+		float dx = (DoGs[layer_index].at<float>(cur_row, cur_col + 1) -
+			DoGs[layer_index].at<float>(cur_row, cur_col - 1)) / 2;
+		float dy = (DoGs[layer_index].at<float>(cur_row + 1, cur_col) -
+			DoGs[layer_index].at<float>(cur_row - 1, cur_col)) / 2;
+		float ds = (DoGs[layer_index + 1].at<float>(cur_row, cur_col) -
+			DoGs[layer_index - 1].at<float>(cur_row, cur_col)) / 2;
 		//Vec3f dD(dx, dy, ds);
 		dD[0] = dx;
 		dD[1] = dy;
 		dD[2] = ds;
 
 		// second partial derivative (3 * 3 hessian matrix)
-		float dxx = dog_pyr[layer_index].at<float>(cur_row, cur_col + 1) +
-			dog_pyr[layer_index].at<float>(cur_row, cur_col - 1) -
-			dog_pyr[layer_index].at<float>(cur_row, cur_col) * 2;
-		float dyy = dog_pyr[layer_index].at<float>(cur_row + 1, cur_col) +
-			dog_pyr[layer_index].at<float>(cur_row - 1, cur_col) -
-			dog_pyr[layer_index].at<float>(cur_row, cur_col) * 2;
-		float dss = dog_pyr[layer_index + 1].at<float>(cur_row, cur_col) +
-			dog_pyr[layer_index - 1].at<float>(cur_row, cur_col) -
-			dog_pyr[layer_index].at<float>(cur_row, cur_col) * 2;
-		float dxy = (dog_pyr[layer_index].at<float>(cur_row + 1, cur_col + 1) -
-			dog_pyr[layer_index].at<float>(cur_row + 1, cur_col - 1) -
-			dog_pyr[layer_index].at<float>(cur_row - 1, cur_col + 1) -
-			dog_pyr[layer_index].at<float>(cur_row - 1, cur_col - 1)) / 4;
-		float dxs = (dog_pyr[layer_index + 1].at<float>(cur_row, cur_col + 1) -
-			dog_pyr[layer_index + 1].at<float>(cur_row, cur_col - 1) -
-			dog_pyr[layer_index - 1].at<float>(cur_row, cur_col + 1) -
-			dog_pyr[layer_index - 1].at<float>(cur_row, cur_col - 1)) / 4;
-		float dys = (dog_pyr[layer_index + 1].at<float>(cur_row + 1, cur_col) -
-			dog_pyr[layer_index + 1].at<float>(cur_row - 1, cur_col) -
-			dog_pyr[layer_index - 1].at<float>(cur_row + 1, cur_col) -
-			dog_pyr[layer_index - 1].at<float>(cur_row - 1, cur_col)) / 4;
+		float dxx = DoGs[layer_index].at<float>(cur_row, cur_col + 1) +
+			DoGs[layer_index].at<float>(cur_row, cur_col - 1) -
+			DoGs[layer_index].at<float>(cur_row, cur_col) * 2;
+		float dyy = DoGs[layer_index].at<float>(cur_row + 1, cur_col) +
+			DoGs[layer_index].at<float>(cur_row - 1, cur_col) -
+			DoGs[layer_index].at<float>(cur_row, cur_col) * 2;
+		float dss = DoGs[layer_index + 1].at<float>(cur_row, cur_col) +
+			DoGs[layer_index - 1].at<float>(cur_row, cur_col) -
+			DoGs[layer_index].at<float>(cur_row, cur_col) * 2;
+		float dxy = (DoGs[layer_index].at<float>(cur_row + 1, cur_col + 1) -
+			DoGs[layer_index].at<float>(cur_row + 1, cur_col - 1) -
+			DoGs[layer_index].at<float>(cur_row - 1, cur_col + 1) -
+			DoGs[layer_index].at<float>(cur_row - 1, cur_col - 1)) / 4;
+		float dxs = (DoGs[layer_index + 1].at<float>(cur_row, cur_col + 1) -
+			DoGs[layer_index + 1].at<float>(cur_row, cur_col - 1) -
+			DoGs[layer_index - 1].at<float>(cur_row, cur_col + 1) -
+			DoGs[layer_index - 1].at<float>(cur_row, cur_col - 1)) / 4;
+		float dys = (DoGs[layer_index + 1].at<float>(cur_row + 1, cur_col) -
+			DoGs[layer_index + 1].at<float>(cur_row - 1, cur_col) -
+			DoGs[layer_index - 1].at<float>(cur_row + 1, cur_col) -
+			DoGs[layer_index - 1].at<float>(cur_row - 1, cur_col)) / 4;
 		Matx33f hessian(dxx, dxy, dxs,
 			dxy, dyy, dys,
 			dxs, dys, dss);
@@ -441,9 +449,9 @@ Feature* SIFT::interpolateExtrema(int octave, int interval, int row, int column)
 		Matx33f inv_hessian(hessian.inv(DECOMP_SVD));
 		offset = -inv_hessian * dD;
 
-		float offset_c = offset[0];
-		float offset_r = offset[1];
-		float offset_i = offset[2];
+		offset_c = offset[0];
+		offset_r = offset[1];
+		offset_i = offset[2];
 
 		// if the offset is smaller than 0.5 in any dimension, return the offset
 		if (abs(offset_c) < 0.5 && abs(offset_r) < 0.5 && abs(offset_i) < 0.5)
@@ -456,10 +464,10 @@ Feature* SIFT::interpolateExtrema(int octave, int interval, int row, int column)
 		cur_interval += cvRound(offset_i);
 
 		// if the point is over the border, discards it
-		if (cur_interval < 0 || cur_interval > intervals ||
+		if (cur_interval < 0 || cur_interval > scale ||
 			cur_col < SIFT_IMG_BORDER || cur_row < SIFT_IMG_BORDER ||
-			cur_col >= dog_pyr[octave * (intervals + 2) + cur_interval + 1].cols - SIFT_IMG_BORDER ||
-			cur_row >= dog_pyr[octave * (intervals + 2) + cur_interval + 1].rows - SIFT_IMG_BORDER)
+			cur_col >= DoGs[octave * (scale + 2) + cur_interval + 1].cols - SIFT_IMG_BORDER ||
+			cur_row >= DoGs[octave * (scale + 2) + cur_interval + 1].rows - SIFT_IMG_BORDER)
 			return NULL;
 
 		i++;
@@ -470,37 +478,40 @@ Feature* SIFT::interpolateExtrema(int octave, int interval, int row, int column)
 
 	// rejecting unstable extrema with low contrast
 	// all extrema with a value of |D(x)| less than the threshold (0.03 in Lowe's paper) were discarded
-	int layer_index = octave * (intervals + 2) + cur_interval + 1;
-	float Dx = dog_pyr[layer_index].at<float>(cur_row, cur_col) + dD.dot(offset) / 2;
+	int layer_index = octave * (scale + 2) + cur_interval + 1;
+	float Dx = DoGs[layer_index].at<float>(cur_row, cur_col) + dD.dot(offset) / 2;
 	if (abs(Dx) < SIFT_CONTR_THR)
 		return NULL;
 
 	if (!isEdge(octave, cur_interval, cur_row, cur_col)) {
-		//TODO: return feature
+		// the keypoint's actual coordinate in the image
+		double x = (cur_col + offset_c) * pow(2.0, octave);
+		double y = (cur_row + offset_r) * pow(2.0, octave);
+		key_point kp = { x, y, octave, cur_interval, 0.0, NULL };
+		return &kp;
 	}
 }
- 
+
 // eliminate edge responses
- 
 bool SIFT::isEdge(int octave, int interval, int row, int column) {
-	int layer_index = octave * (intervals + 2) + interval + 1;
+	int layer_index = octave * (scale + 2) + interval + 1;
 
 	// the principal curvatures can be computed from a 2 * 2 hessian matrix
-	float dxx = dog_pyr[layer_index].at<float>(row, column + 1) +
-		dog_pyr[layer_index].at<float>(row, column - 1) -
-		dog_pyr[layer_index].at<float>(row, column) * 2;
-	float dyy = dog_pyr[layer_index].at<float>(row + 1, column) +
-		dog_pyr[layer_index].at<float>(row - 1, column) -
-		dog_pyr[layer_index].at<float>(row, column) * 2;
-	float dxy = (dog_pyr[layer_index].at<float>(row + 1, column + 1) -
-		dog_pyr[layer_index].at<float>(row + 1, column - 1) -
-		dog_pyr[layer_index].at<float>(row - 1, column + 1) -
-		dog_pyr[layer_index].at<float>(row - 1, column - 1)) / 4;
+	float dxx = DoGs[layer_index].at<float>(row, column + 1) +
+		DoGs[layer_index].at<float>(row, column - 1) -
+		DoGs[layer_index].at<float>(row, column) * 2;
+	float dyy = DoGs[layer_index].at<float>(row + 1, column) +
+		DoGs[layer_index].at<float>(row - 1, column) -
+		DoGs[layer_index].at<float>(row, column) * 2;
+	float dxy = (DoGs[layer_index].at<float>(row + 1, column + 1) -
+		DoGs[layer_index].at<float>(row + 1, column - 1) -
+		DoGs[layer_index].at<float>(row - 1, column + 1) -
+		DoGs[layer_index].at<float>(row - 1, column - 1)) / 4;
 
 	float trace = dxx + dyy;
 	float det = dxx * dyy - dxy * dxy;
 
-	//if the curvatures have different signs, the point is discarded as not being an extrema
+	//if the curvatures have different signs, the point is discarded as not being an extremum
 	if (det <= 0)
 		return true;
 
@@ -510,5 +521,3 @@ bool SIFT::isEdge(int octave, int interval, int row, int column) {
 
 	return false;
 }
- 
- 
