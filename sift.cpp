@@ -24,10 +24,12 @@ SIFT::SIFT(Mat& img, int octave, int scale, double sigma){
 	this->gaussPyr = generateGaussianPyramid(img, octave, scale, sigma);
 	this->DoGs = generateDoGPyramid(this->gaussPyr, octave, scale, sigma);
 	vector<key_point> keypoints = findKeypoints();
+	/**********testing**********/
 	if (keypoints.size() != 0) {
 		cout << "sucess" << endl;
 		cout << keypoints.size() << endl;
 	}
+	/**********testing**********/
 }
 
 /*************************************************
@@ -340,21 +342,24 @@ GaussianMask::GaussianMask(double sigma){
 // detect features by finding extrema in DoG scale space
 vector<key_point> SIFT::findKeypoints() {
 	vector<key_point> keyPoints;
-	for (int o = 0; o < octave; o++)
-	for (int i = 0; i < scale; i++)
-	for (int r = SIFT_IMG_BORDER; r < DoGs[o * (scale + 2) + i + 1].rows - SIFT_IMG_BORDER; r++)
-	for (int c = SIFT_IMG_BORDER; c < DoGs[o * (scale + 2) + i + 1].cols - SIFT_IMG_BORDER; c++) {
-		if (isExtremum(o, i, r, c)) {
-			key_point* kp = interpolateExtrema(o, i, r, c);
-			if (kp != NULL) {
-				key_point new_kp;
-				new_kp.x = kp->x;
-				new_kp.y = kp->y;
-				new_kp.oct_id = kp->oct_id;
-				new_kp.scale_id = kp->scale_id;
-				new_kp.orientation = kp->orientation;
-				new_kp.v = kp->v;
-				keyPoints.push_back(new_kp);
+	for (int o = 0; o < octave; o++) {
+	    for (int i = 0; i < scale; i++) {
+	        for (int r = SIFT_IMG_BORDER; r < DoGs[o * (scale + 2) + i + 1].rows - SIFT_IMG_BORDER; r++) {
+				for (int c = SIFT_IMG_BORDER; c < DoGs[o * (scale + 2) + i + 1].cols - SIFT_IMG_BORDER; c++) {
+					if (isExtremum(o, i, r, c)) {
+						key_point* kp = interpolateExtrema(o, i, r, c);
+						if (kp != NULL) {
+							key_point new_kp;
+							new_kp.x = kp->x;
+							new_kp.y = kp->y;
+							new_kp.oct_id = kp->oct_id;
+							new_kp.scale_id = kp->scale_id;
+							new_kp.orientation = kp->orientation;
+							new_kp.v = kp->v;
+							keyPoints.push_back(new_kp);
+						}
+					}
+				}
 			}
 		}
 	}
@@ -369,16 +374,18 @@ bool SIFT::isExtremum(int octave, int interval, int row, int column) {
 	double cur_value = DoGs[octave * (this->scale + 2) + interval + 1].at<double>(row, column);
 
 	// (for convenience the loop check include current pixel itself)
-	for (int i = interval - 1; i <= interval + 1; i++)
-	for (int r = row - 1; r <= row + 1; r++)
-	for (int c = column - 1; c <= column + 1; c++) {
-		// current image = DoGs[octave * (scale + 2) + i + 1]
-		if (cur_value < DoGs[octave * (scale + 2) + i + 1].at<double>(r, c))
-			maximum = false;
-		if (cur_value > DoGs[octave * (scale + 2) + i + 1].at<double>(r, c))
-			minimum = false;
-		if (!maximum && !minimum)
-			return false;
+	for (int i = interval - 1; i <= interval + 1; i++) {
+		for (int r = row - 1; r <= row + 1; r++) {
+			for (int c = column - 1; c <= column + 1; c++) {
+				// current image = DoGs[octave * (scale + 2) + i + 1]
+				if (cur_value < DoGs[octave * (scale + 2) + i + 1].at<double>(r, c))
+					maximum = false;
+				if (cur_value > DoGs[octave * (scale + 2) + i + 1].at<double>(r, c))
+					minimum = false;
+				if (!maximum && !minimum)
+					return false;
+			}
+		}
 	}
 	return true;
 }
@@ -463,6 +470,7 @@ key_point* SIFT::interpolateExtrema(int octave, int interval, int row, int colum
 		i++;
 	}
 
+	// can not find keypoint within the iteration
 	if (i >= SIFT_MAX_INTERP_STEPS)
 		return NULL;
 
@@ -477,7 +485,9 @@ key_point* SIFT::interpolateExtrema(int octave, int interval, int row, int colum
 		// the keypoint's actual coordinate in the image
 		double x = (cur_col + offset_c) * pow(2.0, octave);
 		double y = (cur_row + offset_r) * pow(2.0, octave);
+
 		key_point kp = { x, y, octave, cur_interval, 0.0, NULL };
+
 		return &kp;
 	}
 	else
