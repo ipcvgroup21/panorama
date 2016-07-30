@@ -12,31 +12,51 @@ static const float SIFT_CONTR_THR = 0.04f;
 
 static const float SIFT_CURV_THR = 10.f;
 
+typedef struct key_points
+{
+public:
+	double x;
+	double y;
+	int oct_id;
+	int scale_id;
+	double orientation;
+	std::vector<double> *v;
+} key_point;
+
 class Sift {
 private:
 	int octaves;
 	int intervals;
 	Mat* dog_pyr;
 public:
-	void findKeypoints();
+	vector<key_point> findKeypoints();
 	bool isExtremum(int octave, int interval, int row, int column);
-	Feature* interpolateExtrema(int octave, int interval, int row, int column);
+	key_point* interpolateExtrema(int octave, int interval, int row, int column);
 	bool isEdge(int octave, int interval, int row, int column);
 };
 
 // detect features by finding extrema in DoG scale space
-void Sift::findKeypoints() {
+vector<key_point> Sift::findKeypoints() {
+	vector<key_point> keyPoints;
 	for (int o = 0; o < octaves; o++)
 	for (int i = 0; i < intervals; i++)
 	for (int r = SIFT_IMG_BORDER; r < dog_pyr[o * (intervals + 2) + i + 1].rows - SIFT_IMG_BORDER; r++)
 	for (int c = SIFT_IMG_BORDER; c < dog_pyr[o * (intervals + 2) + i + 1].cols - SIFT_IMG_BORDER; c++) {
 		if (isExtremum(o, i, r, c)) {
-			if (interpolateExtrema(o, i, r, c) != NULL) {
-				// TODO: add feature
+			key_point* kp = interpolateExtrema(o, i, r, c);
+			if (kp != NULL) {
+				key_point new_kp;
+				new_kp.x = kp->x;
+				new_kp.y = kp->y;
+				new_kp.oct_id = kp->oct_id;
+				new_kp.scale_id = kp->scale_id;
+				new_kp.orientation = kp->orientation;
+				new_kp.v = kp->v;
+				keyPoints.push_back(new_kp);
 			}
 		}
 	}
-	// TODO: remove duplicated features
+	return keyPoints;
 }
 
 // check its 26 neighbors in 3x3 regions at the current and adjacent scales
@@ -62,13 +82,14 @@ bool Sift::isExtremum(int octave, int interval, int row, int column) {
 }
 
 // interpolate extrema to sub-pixel accuracy
-Feature* Sift::interpolateExtrema(int octave, int interval, int row, int column){
+key_point* Sift::interpolateExtrema(int octave, int interval, int row, int column){
 	int i = 0;
 	int cur_interval = interval;
 	int cur_row = row;
 	int cur_col = column;
 	Vec3f dD;
 	Vec3f offset;
+	double offset_c, offset_r, offset_i;
 	while (i < SIFT_MAX_INTERP_STEPS) {
 		int layer_index = octave * (intervals + 2) + cur_interval + 1;
 
@@ -114,9 +135,9 @@ Feature* Sift::interpolateExtrema(int octave, int interval, int row, int column)
 		Matx33f inv_hessian(hessian.inv(DECOMP_SVD));
 		offset = -inv_hessian * dD;
 
-		float offset_c = offset[0];
-		float offset_r = offset[1];
-		float offset_i = offset[2];
+		offset_c = offset[0];
+		offset_r = offset[1];
+		offset_i = offset[2];
 
 		// if the offset is smaller than 0.5 in any dimension, return the offset
 		if (abs(offset_c) < 0.5 && abs(offset_r) < 0.5 && abs(offset_i) < 0.5)
@@ -149,7 +170,11 @@ Feature* Sift::interpolateExtrema(int octave, int interval, int row, int column)
 		return NULL;
 
 	if (!isEdge(octave, cur_interval, cur_row, cur_col)) {
-		//TODO: return feature
+		// the keypoint's actual coordinate in the image
+		double x = (cur_col + offset_c) * pow(2.0, octave);
+		double y = (cur_row + offset_r) * pow(2.0, octave);
+		key_point kp = { x, y, octave, cur_interval, 0.0, NULL };
+		return &kp;
 	}
 }
 
