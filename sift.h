@@ -1,3 +1,4 @@
+
 /*************************************************
 Copyright: SIFT::panorama
 Author: Sally
@@ -22,13 +23,13 @@ using namespace std;
 /* Recommended scale spaces */
 #define INTERVALS 3
 
-static const int SIFT_IMG_BORDER = 5;
+#define SIFT_IMG_BORDER 5
 
-static const int SIFT_MAX_INTERP_STEPS = 5;
+#define SIFT_MAX_INTERP_STEPS 5
 
-static const float SIFT_CONTR_THR = 0.04f;
+#define SIFT_CONTR_THR 0.04f
 
-static const float SIFT_CURV_THR = 10.f;
+#define SIFT_CURV_THR 10.f
 
 /* Data struct of key point */
 typedef struct key_points{
@@ -84,3 +85,4 @@ class GaussianMask{
 		int getSize(){return maskSize;}
 };
 #endif
+
