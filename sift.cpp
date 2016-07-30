@@ -267,12 +267,12 @@ Inputs:      // src, input gray image and its bit depth
 Outputs:	 // 1D vector of DoG Pyramid
 **************************************************/ 
 Mat* SIFT::generateDoGPyramid(Mat* gaussPyr, int octaves, int scales, double sigma){
-	int intervalgaussPyr = scale + 2;
+	int intervalDoGs = scale + 2;
 	int intervalGaus = scale + 3;
-	Mat* dogPyr = new Mat[this->octave * intervalgaussPyr];
+	Mat* dogPyr = new Mat[this->octave * intervalDoGs];
 
 	for(int i = 0; i < octaves; i++){
-		for(int j = 0; j < intervalgaussPyr; j++){
+		for(int j = 0; j < intervalDoGs; j++){
 			int number = i * intervalGaus + j;
 			Mat subImg;
 			substruction(gaussPyr[i * intervalGaus + j + 1], gaussPyr[i * intervalGaus + j], subImg);
@@ -282,7 +282,7 @@ Mat* SIFT::generateDoGPyramid(Mat* gaussPyr, int octaves, int scales, double sig
 	
 	// Test:
 	/*
-	for(int i = 0; i < this->octave * intervalgaussPyr; i++){
+	for(int i = 0; i < this->octave * intervalDoGs; i++){
 		char buffer[20];
 		itoa(i,buffer,10);
 		string number(buffer);
