@@ -21,8 +21,8 @@ SIFT::SIFT(Mat& img,int octave, int scale, double sigma){
 	this->scale = scale;
 	
 	// Construct the scale space
-	vector<Mat> gauPyr = generateGaussianPyramid(img,octave,scale,sigma);
-	this->DoGs = generateDoGPyramid(gauPyr,octave,scale,sigma);
+	this->gaussPyr = generateGaussianPyramid(img,octave,scale,sigma);
+	this->DoGs = generateDoGPyramid(this->gaussPyr,octave,scale,sigma);
 
 }
 
@@ -215,11 +215,12 @@ Inputs:      // src, input gray image and its bit depth
 			 // sigma, the parameter of Gaussian
 Outputs:	 // 1D vector of Gaussian Pyramid
 **************************************************/  
-vector<Mat> SIFT::generateGaussianPyramid(Mat& src, int octaves, int scales, double sigma){
+Mat* SIFT::generateGaussianPyramid(Mat& src, int octaves, int scales, double sigma){
 	double k = pow(2, (1 / (double)this->scale));
 	int intervalGaus = scale + 3;
 
-	vector<Mat> gaussPyr;
+	Mat* gaussPyr = new Mat[octaves * intervalGaus];
+
 	// Convert to Gray image and Up sample 
 	Mat initGrayImg, initUpSampling;
 	convertRGBToGray64F(src,initGrayImg);
@@ -236,34 +237,21 @@ vector<Mat> SIFT::generateGaussianPyramid(Mat& src, int octaves, int scales, dou
 	for(int i = 0; i < intervalGaus; i++){
 		Mat smoothing;
 		gaussianSmoothing(initUpSampling, smoothing, (sigmas[i] * sigma));
-		gaussPyr.insert(gaussPyr.end(), smoothing);
+		gaussPyr[i] = smoothing;
 	}
 	// Use down sample to generate every first layer of rest octave 
 	// And then get smooth images base on it
-	vector<Mat>::iterator it;
 	for(int i = 1; i < octaves; i++){
-		int prevLayer = intervalGaus * (i - 1);
-		it = gaussPyr.begin() + prevLayer;
 		Mat downSampling;
-		downSample(*it, downSampling);
-		gaussPyr.insert(gaussPyr.end(),downSampling);
+		downSample(gaussPyr[intervalGaus * (i - 1) + 3], downSampling);
+		gaussPyr[i * intervalGaus] = downSampling;
 		for(int j = 1; j < intervalGaus; j++){
 			Mat dsmoothing;
 			gaussianSmoothing(downSampling, dsmoothing, sigmas[j]);
-			gaussPyr.insert(gaussPyr.end(), dsmoothing);
+			gaussPyr[i * intervalGaus + j] = dsmoothing; 
 		}
 
 	}
-	// Test:
-	/* int i;
-	for(it = gaussPyr.begin(), i = 0; it != gaussPyr.end(); it++, i++){
-		char buffer[20];
-		itoa(i,buffer,10);
-		string number(buffer);
-		string name = "Image " + number;
-		namedWindow(name);  
-		imshow(name,*it);  
-	} */
 	return gaussPyr;
 }
 
@@ -278,28 +266,23 @@ Inputs:      // src, input gray image and its bit depth
 			 // sigma, the parameter of Gaussian
 Outputs:	 // 1D vector of DoG Pyramid
 **************************************************/ 
-Mat* SIFT::generateDoGPyramid(vector<Mat>& gaussPyr, int octaves, int scales, double sigma){
-	int intervalDoGs = scale + 2;
+Mat* SIFT::generateDoGPyramid(Mat* gaussPyr, int octaves, int scales, double sigma){
+	int intervalgaussPyr = scale + 2;
 	int intervalGaus = scale + 3;
-	Mat* dogPyr = new Mat[this->octave * intervalDoGs];
+	Mat* dogPyr = new Mat[this->octave * intervalgaussPyr];
 
-	vector<Mat>::iterator currIt;
-	vector<Mat>::iterator nextIt;
 	for(int i = 0; i < octaves; i++){
-		for(int j = 0; j < intervalDoGs; j++){
+		for(int j = 0; j < intervalgaussPyr; j++){
 			int number = i * intervalGaus + j;
-			currIt = gaussPyr.begin() + number;
-			nextIt = gaussPyr.begin() + number + 1;
 			Mat subImg;
-			substruction(*nextIt, *currIt, subImg);
-			dogPyr[i * intervalDoGs + j] = subImg;
-			//dogPyr.insert(dogPyr.end(), subImg);
+			substruction(gaussPyr[i * intervalGaus + j + 1], gaussPyr[i * intervalGaus + j], subImg);
+			dogPyr[i * intervalgaussPyr + j] = subImg;
 		}
 	}
 	
 	// Test:
 	/*
-	for(int i = 0; i < this->octave * intervalDoGs; i++){
+	for(int i = 0; i < this->octave * intervalgaussPyr; i++){
 		char buffer[20];
 		itoa(i,buffer,10);
 		string number(buffer);
@@ -310,6 +293,7 @@ Mat* SIFT::generateDoGPyramid(vector<Mat>& gaussPyr, int octaves, int scales, do
 	*/
 	return dogPyr;
 }
+
 
 
 /*************************************************

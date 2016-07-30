@@ -46,7 +46,8 @@ typedef struct key_points{
 
 class SIFT{
 	private:
-		Mat* DoGs; /* 1D array of DoG */
+		Mat* DoGs; /* 1D array of DoG Pyramid */
+		Mat* gaussPyr;  /* 1D array of Gaussian Pyramid */
 		int octave;  /* number of octaves */
 		int scale; 
 		//double sigma; 
@@ -54,7 +55,7 @@ class SIFT{
 
 	public:
 		SIFT(Mat& img, int octave, int scale, double sigma);
-		~SIFT(){delete[] DoGs;} 
+		~SIFT(){delete[] DoGs; delete[] gaussPyr;} 
 		
 
 	protected:
@@ -64,8 +65,8 @@ class SIFT{
 		void convolve(const Mat& src, double filter[], Mat& dst, int a, int b);
 		void gaussianSmoothing(const Mat& src, Mat& dst, double sigma);
 		void substruction(const Mat& src1, const Mat& src2, Mat& dst);
-		vector<Mat> generateGaussianPyramid(Mat& src, int octaves, int scales, double sigma);
-		Mat* generateDoGPyramid(vector<Mat>& gaussPyr, int octaves, int scales, double sigma);
+		Mat* generateGaussianPyramid(Mat& src, int octaves, int scales, double sigma);
+		Mat* generateDoGPyramid(Mat* gaussPyr, int octaves, int scales, double sigma);
 		
 		vector<key_point> findKeypoints();
 		bool isExtremum(int octave, int interval, int row, int column);
