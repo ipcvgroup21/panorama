@@ -1,0 +1,9 @@
+*.[oa]
+*~
+*.sln
+*.sdf
+*.opensdf
+*.suo
+Debug/
+ipch/
+panorama/
