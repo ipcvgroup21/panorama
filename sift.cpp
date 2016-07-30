@@ -296,7 +296,7 @@ vector<Mat> SIFT::generateDoGPyramid(vector<Mat>& gaussPyr, int octaves, int sca
 	}
 	
 	// Test:
-	/*int num;
+	/* int num;
 	for(currIt = dogPyr.begin(), num = 0; currIt != dogPyr.end(); currIt++, num++){
 		char buffer[20];
 		itoa(num,buffer,10);
@@ -304,7 +304,7 @@ vector<Mat> SIFT::generateDoGPyramid(vector<Mat>& gaussPyr, int octaves, int sca
 		string name = "Image " + number;
 		namedWindow(name);  
 		imshow(name,*currIt);  
-	} */
+	}  */
 	return dogPyr;
 }
 
@@ -345,6 +345,7 @@ GaussianMask::GaussianMask(double sigma){
 }
 
 
+ 
 
 
 
@@ -366,7 +367,7 @@ void SIFT::findKeypoints() {
 // check its 26 neighbors in 3x3 regions at the current and adjacent scales
 // to find out if it's an extremum
 
-bool Sift::isExtremum(int octave, int interval, int row, int column) {
+bool SIFT::isExtremum(int octave, int interval, int row, int column) {
 	bool maximum = true, minimum = true;
 
 	float cur_value = dog_pyr[octave * (intervals + 2) + interval + 1].at<float>(row, column);
@@ -509,4 +510,5 @@ bool SIFT::isEdge(int octave, int interval, int row, int column) {
 
 	return false;
 }
+ 
  
