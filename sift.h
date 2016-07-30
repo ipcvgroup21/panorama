@@ -18,9 +18,17 @@ using namespace cv;
 using namespace std;
 
 /* Recommended sigma */
-#define SIGMA 1.6
+#define SIGMA 1.6f
 /* Recommended scale spaces */
 #define INTERVALS 3
+
+static const int SIFT_IMG_BORDER = 5;
+
+static const int SIFT_MAX_INTERP_STEPS = 5;
+
+static const float SIFT_CONTR_THR = 0.04f;
+
+static const float SIFT_CURV_THR = 10.f;
 
 /* Data struct of key point */
 struct Keypoint{
@@ -53,6 +61,11 @@ class SIFT{
 		void substruction(const Mat& src1, const Mat& src2, Mat& dst);
 		vector<Mat> generateGaussianPyramid(Mat& src, int octaves, int scales, double sigma);
 		vector<Mat> generateDoGPyramid(vector<Mat>& gaussPyr, int octaves, int scales, double sigma);
+
+		void findKeypoints();
+		bool isExtremum(int octave, int interval, int row, int column);
+		Feature* interpolateExtrema(int octave, int interval, int row, int column);
+		bool isEdge(int octave, int interval, int row, int column);
 };
 
 class GaussianMask{
