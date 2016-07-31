@@ -47,7 +47,7 @@ typedef struct key_points{
 class SIFT{
 	private:
 		Mat* DoGs; /* 1D array of DoG Pyramid */
-		Mat* gaussPyr;  /* 1D array of Gaussian Pyramid */
+		Mat* gausPyr;  /* 1D array of Gaussian Pyramid */
 		int octave;  /* number of octaves */
 		int scale; 
 		//double sigma; 
@@ -55,7 +55,7 @@ class SIFT{
 
 	public:
 		SIFT(Mat& img, int octave, int scale, double sigma);
-		~SIFT(){delete[] DoGs; delete[] gaussPyr;} 
+		~SIFT(){delete[] DoGs; delete[] gausPyr;} 
 		
 
 	protected:

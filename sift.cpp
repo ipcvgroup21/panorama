@@ -21,8 +21,8 @@ SIFT::SIFT(Mat& img,int octave, int scale, double sigma){
 	this->scale = scale;
 	
 	// Construct the scale space
-	this->gaussPyr = generateGaussianPyramid(img,octave,scale,sigma);
-	this->DoGs = generateDoGPyramid(this->gaussPyr,octave,scale,sigma);
+	this->gausPyr = generateGaussianPyramid(img,octave,scale,sigma);
+	this->DoGs = generateDoGPyramid(this->gausPyr,octave,scale,sigma);
 
 }
 
@@ -80,8 +80,8 @@ void SIFT::upSample(const Mat& src, Mat& dst){
 	dst = cvCreateMat(src.rows * 2, src.cols * 2, CV_64F);
 
 	// Up sample with  linear interpolation
-	for(int srcX = 0; srcX < src.rows - 1; srcX++){
-		for (int srcY = 0; srcY < src.cols - 1; srcY++){
+	for(int srcX = 0; srcX < src.rows ; srcX++){
+		for (int srcY = 0; srcY < src.cols ; srcY++){
 			((double*)dst.data)[(srcX * 2) * dst.cols + (srcY * 2)] = ((double*)src.data)[srcX * src.cols + srcY];
 			// interpolate x
 			double dx = ((double*)src.data)[srcX * src.cols + srcY] + ((double*)src.data)[(srcX + 1) * src.cols + srcY];
@@ -147,20 +147,34 @@ Inputs:      // src, input gray image and its bit depth
 void SIFT::convolve(const Mat& src, double filter[], Mat& dst, int a, int b){
 	// Initialization
 	dst = cvCreateMat(src.rows, src.cols, CV_64F);
+	
+	// Padding
+	Mat srcPadding = cvCreateMat(src.rows + 2 * a, src.cols + 2 * b, CV_64F);
+	for(int x = 0; x < srcPadding.rows; x++){
+		for(int y = 0; y < srcPadding.cols; y++){
+			if(y >= (src.cols + b - 1 ) || x >= ( src.rows + a - 1))
+				((double*)srcPadding.data)[x * srcPadding.cols + y] = 0.0;
+			else if((y <= b ) || x <= a)
+				((double*)srcPadding.data)[x * srcPadding.cols + y] = 0.0;
+			else
+				((double*)srcPadding.data)[x * srcPadding.cols + y] = ((double*)src.data)[(x - a) * src.cols + y - b];
+		}
+	}
+
 	int filterSize = min(2 * a + 1, 2 * b + 1);
 
-	for(int x = a; x < src.rows - a; x++){
-		for(int y = b; y < src.cols - b; y++){
+	for(int x = a; x < srcPadding.rows - a; x++){
+		for(int y = b; y < srcPadding.cols - b; y++){
 			double sum = 0.0;
 			for(int s = -a; s <= a; s++){
 				for(int t = -b; t <= b; t++){
 					sum += filter[(s + a) * filterSize + (t + b)] 
-							* ((double*)src.data)[(x + s) * src.cols + (y + t)];
+							* ((double*)srcPadding.data)[(x + s) * srcPadding.cols + (y + t)];
 				}
 			}
-			((double*)dst.data)[x * src.cols + y] = sum;
+			((double*)dst.data)[(x - a) * dst.cols + (y - b)] = sum;
 		}
-	}
+	} 
 }
 
 /*************************************************
@@ -225,10 +239,10 @@ Mat* SIFT::generateGaussianPyramid(Mat& src, int octaves, int scales, double sig
 	Mat initGrayImg, initUpSampling;
 	convertRGBToGray64F(src,initGrayImg);
 	upSample(initGrayImg, initUpSampling);
-	
+
 	// Generate a list of series of sigma
 	double *sigmas = new double[intervalGaus];
-	sigmas[0] = 1.0;
+	sigmas[0] = sigma;
 	for(int i = 1; i < intervalGaus; i++){
 		sigmas[i] = sigmas[i - 1] * k;
 	}
@@ -236,22 +250,36 @@ Mat* SIFT::generateGaussianPyramid(Mat& src, int octaves, int scales, double sig
 	// Generate smoothing images in the first octave
 	for(int i = 0; i < intervalGaus; i++){
 		Mat smoothing;
-		gaussianSmoothing(initUpSampling, smoothing, (sigmas[i] * sigma));
+		if(i == 0)
+			gaussianSmoothing(initUpSampling, smoothing, sigmas[i]);
+		else
+			gaussianSmoothing(gaussPyr[i-1], smoothing, sigmas[i]);
 		gaussPyr[i] = smoothing;
 	}
 	// Use down sample to generate every first layer of rest octave 
 	// And then get smooth images base on it
+	 
 	for(int i = 1; i < octaves; i++){
 		Mat downSampling;
 		downSample(gaussPyr[intervalGaus * (i - 1) + 3], downSampling);
 		gaussPyr[i * intervalGaus] = downSampling;
 		for(int j = 1; j < intervalGaus; j++){
 			Mat dsmoothing;
-			gaussianSmoothing(downSampling, dsmoothing, sigmas[j]);
+			gaussianSmoothing(gaussPyr[i * intervalGaus + j - 1], dsmoothing, sigmas[j]);
 			gaussPyr[i * intervalGaus + j] = dsmoothing; 
 		}
 
-	}
+	} 
+	 
+	// Test:
+	 /*for(int i = 0; i < this->octave * intervalGaus; i++){
+		char buffer[20];
+		itoa(i,buffer,10);
+		string number(buffer);
+		string name = "Image " + number;
+		namedWindow(name);  
+		imshow(name,gaussPyr[i]); 
+	}*/
 	return gaussPyr;
 }
 
@@ -276,13 +304,12 @@ Mat* SIFT::generateDoGPyramid(Mat* gaussPyr, int octaves, int scales, double sig
 			int number = i * intervalGaus + j;
 			Mat subImg;
 			substruction(gaussPyr[i * intervalGaus + j + 1], gaussPyr[i * intervalGaus + j], subImg);
-			dogPyr[i * intervalgaussPyr + j] = subImg;
+			dogPyr[i * intervalDoGs + j] = subImg;
 		}
 	}
 	
 	// Test:
-	/*
-	for(int i = 0; i < this->octave * intervalDoGs; i++){
+	/*for(int i = 0; i < this->octave * intervalDoGs; i++){
 		char buffer[20];
 		itoa(i,buffer,10);
 		string number(buffer);
@@ -290,7 +317,7 @@ Mat* SIFT::generateDoGPyramid(Mat* gaussPyr, int octaves, int scales, double sig
 		namedWindow(name);  
 		imshow(name,dogPyr[i]); 
 	}
-	*/
+	 */
 	return dogPyr;
 }
 
@@ -305,6 +332,7 @@ GaussianMask::GaussianMask(double sigma){
 	double gaussianDieOff = 0.001;
 	vector<double> halfMask;
 	for(int i = 0; true; i++){
+	//for(int i = 0; i <= 3; i++){
 		double d = exp(- i * i / (2 * sigma * sigma));
 		if(d < gaussianDieOff) 
 			break;
