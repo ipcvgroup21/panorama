@@ -10,45 +10,52 @@ Description: Implement Extract SIFT features.
 /*************************************************
 Function:    // SIFT
 Description: // Constructor of class SIFT
-Calls:		
+Calls:
 Inputs:      // src, input image
-             // sigma, the parameter of Gaussian
-			 // scale, the height of scale space
+// sigma, the parameter of Gaussian
+// scale, the height of scale space
 **************************************************/
-SIFT::SIFT(Mat& img,int octave, int scale, double sigma){
+SIFT::SIFT(Mat& img, int octave, int scale, double sigma){
 	// Initial the parameters
 	this->octave = octave;
 	this->scale = scale;
-	
-	// Construct the scale space
-	this->gausPyr = generateGaussianPyramid(img,octave,scale,sigma);
-	this->DoGs = generateDoGPyramid(this->gausPyr,octave,scale,sigma);
 
+
+	// Construct the scale space
+	this->gausPyr = generateGaussianPyramid(img, octave, scale, sigma);
+	this->DoGs = generateDoGPyramid(this->gausPyr, octave, scale, sigma);
+	vector<key_point> keypoints = findKeypoints();
+	/**********testing**********/
+	if (keypoints.size() != 0) {
+		cout << "sucess" << endl;
+		cout << keypoints.size() << endl;
+	}
+	/**********testing**********/
 }
 
 /*************************************************
 Function:    convertRGBToGray64F
-Description: // convert the input RGB image to a 
-                64F Gray image
+Description: // convert the input RGB image to a
+64F Gray image
 Inputs:      // src, input image
-		     // dst, output image
+// dst, output image
 **************************************************/
 void SIFT::convertRGBToGray64F(const Mat& src, Mat& dst){
 	// Determine the type of input image
-	if(src.channels() == 1){
+	if (src.channels() == 1){
 		cout << "The input image is a gray image." << endl;
 		return;
 	}
 
 	// Initial the size of output image.
-    dst = cvCreateMat(src.rows, src.cols, CV_64F);
-	
+	dst = cvCreateMat(src.rows, src.cols, CV_64F);
+
 	// Convert the image 
-	for(int x = 0; x < src.rows; x++){
-		for(int y = 0; y < src.cols; y++){
-			int b = (int)((uchar*)src.data)[x * src.step + src.channels() * y + 0] ;
-			int g = (int)((uchar*)src.data)[x * src.step + src.channels() * y + 1] ;
-			int r = (int)((uchar*)src.data)[x * src.step + src.channels() * y + 2] ;
+	for (int x = 0; x < src.rows; x++){
+		for (int y = 0; y < src.cols; y++){
+			int b = (int)((uchar*)src.data)[x * src.step + src.channels() * y + 0];
+			int g = (int)((uchar*)src.data)[x * src.step + src.channels() * y + 1];
+			int r = (int)((uchar*)src.data)[x * src.step + src.channels() * y + 2];
 			// Scale the range from 0 to 1
 			((double*)dst.data)[x * dst.cols + y] = (double)(r + g + b) / (double)(255 * 3);
 		}
@@ -58,20 +65,20 @@ void SIFT::convertRGBToGray64F(const Mat& src, Mat& dst){
 
 /*************************************************
 Function:    upSample
-Description: // Use linear interpolation to up sample 
-				the input image and convert its result 
-				to the output image 
+Description: // Use linear interpolation to up sample
+the input image and convert its result
+to the output image
 Inputs:      // src, input gray image and its bit depth
-				is CV_64F
-             // dst, output image
-**************************************************/ 
+is CV_64F
+// dst, output image
+**************************************************/
 void SIFT::upSample(const Mat& src, Mat& dst){
 	// Determine the type of input image
-	if(src.channels() != 1){
+	if (src.channels() != 1){
 		cout << "The input image is not a gray image." << endl;
 		return;
 	}
-	if(src.type() != CV_64F){
+	if (src.type() != CV_64F){
 		cout << "The bit depth of input image is not CV_64F." << endl;
 		return;
 	}
@@ -87,34 +94,34 @@ void SIFT::upSample(const Mat& src, Mat& dst){
 			double dx = ((double*)src.data)[srcX * src.cols + srcY] + ((double*)src.data)[(srcX + 1) * src.cols + srcY];
 			((double*)dst.data)[(srcX * 2 + 1) * dst.cols + (srcY * 2)] = dx / 2.0;
 			// interpolate y
-			double dy =  ((double*)src.data)[srcX * src.cols + srcY] +  ((double*)src.data)[srcX * src.cols + (srcY + 1)];
+			double dy = ((double*)src.data)[srcX * src.cols + srcY] + ((double*)src.data)[srcX * src.cols + (srcY + 1)];
 			((double*)dst.data)[(srcX * 2) * dst.cols + (srcY * 2 + 1)] = dy / 2.0;
 			// interpolate xy
 			/*double dxy = ((double*)src.data)[srcX * src.cols + srcY] + ((double*)src.data)[(srcX + 1) * src.cols + (srcY + 1)];
 			((double*)dst.data)[(srcX * 2 + 1) * dst.cols + (srcY * 2 + 1)] = dxy / 2.0;*/
 			double dxy = ((double*)src.data)[srcX * src.cols + srcY] + ((double*)src.data)[(srcX + 1) * src.cols + srcY]
-			+  ((double*)src.data)[srcX * src.cols + (srcY + 1)] + ((double*)src.data)[(srcX + 1) * src.cols + (srcY + 1)];
+				+ ((double*)src.data)[srcX * src.cols + (srcY + 1)] + ((double*)src.data)[(srcX + 1) * src.cols + (srcY + 1)];
 			((double*)dst.data)[(srcX * 2 + 1) * dst.cols + (srcY * 2 + 1)] = dxy / 4.0;
 		}
 	}
 }
- 
+
 
 /*************************************************
 Function:    downSample
-Description: // Down sample the input image and convert 
-				its result to the output image 
+Description: // Down sample the input image and convert
+its result to the output image
 Inputs:      // src, input gray image and its bit depth
-				is CV_64F
-             // dst, output image
-**************************************************/  
+is CV_64F
+// dst, output image
+**************************************************/
 void SIFT::downSample(const Mat& src, Mat& dst){
 	// Determine the type of input image
-	if(src.channels() != 1){
+	if (src.channels() != 1){
 		cout << "The input image is not a gray image." << endl;
 		return;
 	}
-	if(src.type() != CV_64F){
+	if (src.type() != CV_64F){
 		cout << "The bit depth of input image is not CV_64F." << endl;
 		return;
 	}
@@ -122,12 +129,12 @@ void SIFT::downSample(const Mat& src, Mat& dst){
 	// Initial the size of output image.
 	dst = cvCreateMat(src.rows / 2, src.cols / 2, CV_64F);
 
-	for(int dstX = 0; dstX < dst.rows; dstX++){
-		for(int dstY = 0; dstY < dst.cols; dstY++){
-			double sum = ((double*)src.data)[(dstX * 2)* src.cols + (dstY * 2)] 
-						+ ((double*)src.data)[(dstX * 2 + 1 )* src.cols + (dstY * 2)]
-						+ ((double*)src.data)[(dstX * 2)* src.cols + (dstY * 2 + 1)]
-						+ ((double*)src.data)[(dstX * 2 + 1 )* src.cols + (dstY * 2 + 1)];
+	for (int dstX = 0; dstX < dst.rows; dstX++){
+		for (int dstY = 0; dstY < dst.cols; dstY++){
+			double sum = ((double*)src.data)[(dstX * 2)* src.cols + (dstY * 2)]
+				+ ((double*)src.data)[(dstX * 2 + 1)* src.cols + (dstY * 2)]
+				+ ((double*)src.data)[(dstX * 2)* src.cols + (dstY * 2 + 1)]
+				+ ((double*)src.data)[(dstX * 2 + 1)* src.cols + (dstY * 2 + 1)];
 			((double*)dst.data)[dstX * dst.cols + dstY] = sum / 4.0;
 		}
 	}
@@ -138,12 +145,12 @@ void SIFT::downSample(const Mat& src, Mat& dst){
 Function:    convolve
 Description: // Convolution of the input image with the filter
 Inputs:      // src, input gray image and its bit depth
-				is CV_64F
-			 // filter
-             // dst, output image
-			 // a, the width of the filter
-			 // b, the height of the filter
-**************************************************/  
+is CV_64F
+// filter
+// dst, output image
+// a, the width of the filter
+// b, the height of the filter
+**************************************************/
 void SIFT::convolve(const Mat& src, double filter[], Mat& dst, int a, int b){
 	// Initialization
 	dst = cvCreateMat(src.rows, src.cols, CV_64F);
@@ -179,41 +186,41 @@ void SIFT::convolve(const Mat& src, double filter[], Mat& dst, int a, int b){
 
 /*************************************************
 Function:    gaussianSmoothing
-Description: // Gaussian Smoothing of the input image 
+Description: // Gaussian Smoothing of the input image
 Inputs:      // src, input gray image and its bit depth
-				is CV_64F
-             // dst, output image
-			 // sigma
-**************************************************/  
+is CV_64F
+// dst, output image
+// sigma
+**************************************************/
 void SIFT::gaussianSmoothing(const Mat& src, Mat& dst, double sigma){
 	// Generate the gaussian mask
 	GaussianMask gaussianMask(sigma);
 	double* filter = gaussianMask.getFullMask();
 	int filterSize = gaussianMask.getSize();
 	Mat dstCx;
-	convolve(src, filter,dstCx, filterSize / 2,0);
-	convolve(dstCx, filter,dst, 0, filterSize / 2);
+	convolve(src, filter, dstCx, filterSize / 2, 0);
+	convolve(dstCx, filter, dst, 0, filterSize / 2);
 }
 
 
 /*************************************************
 Function:    gaussianSmoothing
-Description: // Gaussian Smoothing of the input image 
+Description: // Gaussian Smoothing of the input image
 Inputs:      // src, input gray image and its bit depth
-				is CV_64F
-             // dst, output image
-			 // sigma
-**************************************************/  
+is CV_64F
+// dst, output image
+// sigma
+**************************************************/
 void SIFT::substruction(const Mat& src1, const Mat& src2, Mat& dst){
-	if(src1.cols != src2.cols || src1.cols != src2.cols ){
+	if (src1.cols != src2.cols || src1.cols != src2.cols){
 		cout << "The sizes are not same." << endl;
 		return;
 	}
 	dst = cvCreateMat(src1.rows, src1.cols, CV_64F);
-	for(int x = 0 ; x < src1.rows; x++){
-		for(int y = 0; y < src1.cols; y++){
-			((double*)dst.data)[x * dst.cols + y] = ((double*)src1.data)[x * src1.cols + y] 
-													- ((double*)src2.data)[x * src2.cols + y] ;
+	for (int x = 0; x < src1.rows; x++){
+		for (int y = 0; y < src1.cols; y++){
+			((double*)dst.data)[x * dst.cols + y] = ((double*)src1.data)[x * src1.cols + y]
+				- ((double*)src2.data)[x * src2.cols + y];
 		}
 	}
 }
@@ -221,10 +228,10 @@ void SIFT::substruction(const Mat& src1, const Mat& src2, Mat& dst){
 
 /*************************************************
 Function:    generateGaussianPyramid
-Description: // generate the Gaussian Pyramid 
+Description: // generate the Gaussian Pyramid
 Inputs:      // src, input gray image and its bit depth
-				is CV_64F
-             // octaves, the number of octaves
+			    is CV_64F
+		     // octaves, the number of octaves
 			 // scale, the height of scale space
 			 // sigma, the parameter of Gaussian
 Outputs:	 // 1D vector of Gaussian Pyramid
@@ -237,7 +244,7 @@ Mat* SIFT::generateGaussianPyramid(Mat& src, int octaves, int scales, double sig
 
 	// Convert to Gray image and Up sample 
 	Mat initGrayImg, initUpSampling;
-	convertRGBToGray64F(src,initGrayImg);
+	convertRGBToGray64F(src, initGrayImg);
 	upSample(initGrayImg, initUpSampling);
 
 	// Generate a list of series of sigma
@@ -248,7 +255,7 @@ Mat* SIFT::generateGaussianPyramid(Mat& src, int octaves, int scales, double sig
 	}
 
 	// Generate smoothing images in the first octave
-	for(int i = 0; i < intervalGaus; i++){
+	for (int i = 0; i < intervalGaus; i++){
 		Mat smoothing;
 		if(i == 0)
 			gaussianSmoothing(initUpSampling, smoothing, sigmas[i]);
@@ -280,16 +287,17 @@ Mat* SIFT::generateGaussianPyramid(Mat& src, int octaves, int scales, double sig
 		namedWindow(name);  
 		imshow(name,gaussPyr[i]); 
 	}*/
+
 	return gaussPyr;
 }
 
 
 /*************************************************
 Function:    generateDoGPyramid
-Description: // generate the DoG Pyramid 
+Description: // generate the DoG Pyramid
 Inputs:      // src, input gray image and its bit depth
 				is CV_64F
-             // octaves, the number of octaves
+			 // octaves, the number of octaves
 			 // scale, the height of scale space
 			 // sigma, the parameter of Gaussian
 Outputs:	 // 1D vector of DoG Pyramid
@@ -307,7 +315,7 @@ Mat* SIFT::generateDoGPyramid(Mat* gaussPyr, int octaves, int scales, double sig
 			dogPyr[i * intervalDoGs + j] = subImg;
 		}
 	}
-	
+
 	// Test:
 	/*for(int i = 0; i < this->octave * intervalDoGs; i++){
 		char buffer[20];
@@ -336,37 +344,37 @@ GaussianMask::GaussianMask(double sigma){
 		double d = exp(- i * i / (2 * sigma * sigma));
 		if(d < gaussianDieOff) 
 			break;
-		halfMask.insert(halfMask.begin(),d);
+		halfMask.insert(halfMask.begin(), d);
 	}
 
 	this->maskSize = 2 * halfMask.size() - 1;
 	this->fullMask = new double[this->maskSize];
 	vector<double>::iterator it;
 	int num = 0;
-	for(it = halfMask.begin(); it != halfMask.end(); it++, num++){
+	for (it = halfMask.begin(); it != halfMask.end(); it++, num++){
 		fullMask[num] = *it;
 	}
-	for(num -= 1; num < this->maskSize ; num++){
-		fullMask[num] = fullMask[this->maskSize  - 1 - num];
+	for (num -= 1; num < this->maskSize; num++){
+		fullMask[num] = fullMask[this->maskSize - 1 - num];
 	}
 
 	double sum = 0.0;
-	for(int i = 0; i < maskSize; i++){
+	for (int i = 0; i < maskSize; i++){
 		sum += fullMask[i];
 	}
-	for(int i = 0; i < maskSize; i++){
+	for (int i = 0; i < maskSize; i++){
 		fullMask[i] /= sum;
 	}
 }
 
 
- 
+
 // detect features by finding extrema in DoG scale space
 vector<key_point> SIFT::findKeypoints() {
 	vector<key_point> keyPoints;
-	for (int o = 0; o < octave; o++)
-		for (int i = 0; i < scale; i++)
-			for (int r = SIFT_IMG_BORDER; r < DoGs[o * (scale + 2) + i + 1].rows - SIFT_IMG_BORDER; r++)
+	for (int o = 0; o < octave; o++) {
+	    for (int i = 0; i < scale; i++) {
+	        for (int r = SIFT_IMG_BORDER; r < DoGs[o * (scale + 2) + i + 1].rows - SIFT_IMG_BORDER; r++) {
 				for (int c = SIFT_IMG_BORDER; c < DoGs[o * (scale + 2) + i + 1].cols - SIFT_IMG_BORDER; c++) {
 					if (isExtremum(o, i, r, c)) {
 						key_point* kp = interpolateExtrema(o, i, r, c);
@@ -382,7 +390,10 @@ vector<key_point> SIFT::findKeypoints() {
 						}
 					}
 				}
-				return keyPoints;
+			}
+		}
+	}
+	return keyPoints;
 }
 
 // check its 26 neighbors in 3x3 regions at the current and adjacent scales
@@ -390,21 +401,23 @@ vector<key_point> SIFT::findKeypoints() {
 bool SIFT::isExtremum(int octave, int interval, int row, int column) {
 	bool maximum = true, minimum = true;
 
-	float cur_value = DoGs[octave * (this->scale + 2) + interval + 1].at<float>(row, column);
+	double cur_value = DoGs[octave * (this->scale + 2) + interval + 1].at<double>(row, column);
 
 	// (for convenience the loop check include current pixel itself)
-	for (int i = interval - 1; i <= interval + 1; i++)
-		for (int r = row - 1; r <= row + 1; r++)
+	for (int i = interval - 1; i <= interval + 1; i++) {
+		for (int r = row - 1; r <= row + 1; r++) {
 			for (int c = column - 1; c <= column + 1; c++) {
 				// current image = DoGs[octave * (scale + 2) + i + 1]
-				if (cur_value < DoGs[octave * (scale + 2) + i + 1].at<float>(r, c))
+				if (cur_value < DoGs[octave * (scale + 2) + i + 1].at<double>(r, c))
 					maximum = false;
-				if (cur_value > DoGs[octave * (scale + 2) + i + 1].at<float>(r, c))
+				if (cur_value > DoGs[octave * (scale + 2) + i + 1].at<double>(r, c))
 					minimum = false;
 				if (!maximum && !minimum)
 					return false;
 			}
-			return true;
+		}
+	}
+	return true;
 }
 
 // interpolate extrema to sub-pixel accuracy
@@ -413,46 +426,48 @@ key_point* SIFT::interpolateExtrema(int octave, int interval, int row, int colum
 	int cur_interval = interval;
 	int cur_row = row;
 	int cur_col = column;
+	int layer_index;
 	Vec3f dD;
 	Vec3f offset;
+	double dx, dy, ds, dxx, dyy, dss, dxy, dxs, dys;
 	double offset_c, offset_r, offset_i;
 	while (i < SIFT_MAX_INTERP_STEPS) {
-		int layer_index = octave * (scale + 2) + cur_interval + 1;
+		layer_index = octave * (scale + 2) + cur_interval + 1;
 
 		// first derivative
-		float dx = (DoGs[layer_index].at<float>(cur_row, cur_col + 1) -
-			DoGs[layer_index].at<float>(cur_row, cur_col - 1)) / 2;
-		float dy = (DoGs[layer_index].at<float>(cur_row + 1, cur_col) -
-			DoGs[layer_index].at<float>(cur_row - 1, cur_col)) / 2;
-		float ds = (DoGs[layer_index + 1].at<float>(cur_row, cur_col) -
-			DoGs[layer_index - 1].at<float>(cur_row, cur_col)) / 2;
+		dx = (DoGs[layer_index].at<double>(cur_row, cur_col + 1) -
+			DoGs[layer_index].at<double>(cur_row, cur_col - 1)) / 2;
+		dy = (DoGs[layer_index].at<double>(cur_row + 1, cur_col) -
+			DoGs[layer_index].at<double>(cur_row - 1, cur_col)) / 2;
+		ds = (DoGs[layer_index + 1].at<double>(cur_row, cur_col) -
+			DoGs[layer_index - 1].at<double>(cur_row, cur_col)) / 2;
 		//Vec3f dD(dx, dy, ds);
 		dD[0] = dx;
 		dD[1] = dy;
 		dD[2] = ds;
 
 		// second partial derivative (3 * 3 hessian matrix)
-		float dxx = DoGs[layer_index].at<float>(cur_row, cur_col + 1) +
-			DoGs[layer_index].at<float>(cur_row, cur_col - 1) -
-			DoGs[layer_index].at<float>(cur_row, cur_col) * 2;
-		float dyy = DoGs[layer_index].at<float>(cur_row + 1, cur_col) +
-			DoGs[layer_index].at<float>(cur_row - 1, cur_col) -
-			DoGs[layer_index].at<float>(cur_row, cur_col) * 2;
-		float dss = DoGs[layer_index + 1].at<float>(cur_row, cur_col) +
-			DoGs[layer_index - 1].at<float>(cur_row, cur_col) -
-			DoGs[layer_index].at<float>(cur_row, cur_col) * 2;
-		float dxy = (DoGs[layer_index].at<float>(cur_row + 1, cur_col + 1) -
-			DoGs[layer_index].at<float>(cur_row + 1, cur_col - 1) -
-			DoGs[layer_index].at<float>(cur_row - 1, cur_col + 1) -
-			DoGs[layer_index].at<float>(cur_row - 1, cur_col - 1)) / 4;
-		float dxs = (DoGs[layer_index + 1].at<float>(cur_row, cur_col + 1) -
-			DoGs[layer_index + 1].at<float>(cur_row, cur_col - 1) -
-			DoGs[layer_index - 1].at<float>(cur_row, cur_col + 1) -
-			DoGs[layer_index - 1].at<float>(cur_row, cur_col - 1)) / 4;
-		float dys = (DoGs[layer_index + 1].at<float>(cur_row + 1, cur_col) -
-			DoGs[layer_index + 1].at<float>(cur_row - 1, cur_col) -
-			DoGs[layer_index - 1].at<float>(cur_row + 1, cur_col) -
-			DoGs[layer_index - 1].at<float>(cur_row - 1, cur_col)) / 4;
+		dxx = DoGs[layer_index].at<double>(cur_row, cur_col + 1) +
+			DoGs[layer_index].at<double>(cur_row, cur_col - 1) -
+			DoGs[layer_index].at<double>(cur_row, cur_col) * 2;
+		dyy = DoGs[layer_index].at<double>(cur_row + 1, cur_col) +
+			DoGs[layer_index].at<double>(cur_row - 1, cur_col) -
+			DoGs[layer_index].at<double>(cur_row, cur_col) * 2;
+		dss = DoGs[layer_index + 1].at<double>(cur_row, cur_col) +
+			DoGs[layer_index - 1].at<double>(cur_row, cur_col) -
+			DoGs[layer_index].at<double>(cur_row, cur_col) * 2;
+		dxy = (DoGs[layer_index].at<double>(cur_row + 1, cur_col + 1) -
+			DoGs[layer_index].at<double>(cur_row + 1, cur_col - 1) -
+			DoGs[layer_index].at<double>(cur_row - 1, cur_col + 1) +
+			DoGs[layer_index].at<double>(cur_row - 1, cur_col - 1)) / 4;
+		dxs = (DoGs[layer_index + 1].at<double>(cur_row, cur_col + 1) -
+			DoGs[layer_index + 1].at<double>(cur_row, cur_col - 1) -
+			DoGs[layer_index - 1].at<double>(cur_row, cur_col + 1) +
+			DoGs[layer_index - 1].at<double>(cur_row, cur_col - 1)) / 4;
+		dys = (DoGs[layer_index + 1].at<double>(cur_row + 1, cur_col) -
+			DoGs[layer_index + 1].at<double>(cur_row - 1, cur_col) -
+			DoGs[layer_index - 1].at<double>(cur_row + 1, cur_col) +
+			DoGs[layer_index - 1].at<double>(cur_row - 1, cur_col)) / 4;
 		Matx33f hessian(dxx, dxy, dxs,
 			dxy, dyy, dys,
 			dxs, dys, dss);
@@ -476,7 +491,7 @@ key_point* SIFT::interpolateExtrema(int octave, int interval, int row, int colum
 		cur_interval += cvRound(offset_i);
 
 		// if the point is over the border, discards it
-		if (cur_interval < 0 || cur_interval > scale ||
+		if (cur_interval < 0 || cur_interval > scale - 1 ||
 			cur_col < SIFT_IMG_BORDER || cur_row < SIFT_IMG_BORDER ||
 			cur_col >= DoGs[octave * (scale + 2) + cur_interval + 1].cols - SIFT_IMG_BORDER ||
 			cur_row >= DoGs[octave * (scale + 2) + cur_interval + 1].rows - SIFT_IMG_BORDER)
@@ -485,13 +500,14 @@ key_point* SIFT::interpolateExtrema(int octave, int interval, int row, int colum
 		i++;
 	}
 
+	// can not find keypoint within the iteration
 	if (i >= SIFT_MAX_INTERP_STEPS)
 		return NULL;
 
 	// rejecting unstable extrema with low contrast
 	// all extrema with a value of |D(x)| less than the threshold (0.03 in Lowe's paper) were discarded
-	int layer_index = octave * (scale + 2) + cur_interval + 1;
-	float Dx = DoGs[layer_index].at<float>(cur_row, cur_col) + dD.dot(offset) / 2;
+	layer_index = octave * (scale + 2) + cur_interval + 1;
+	double Dx = DoGs[layer_index].at<double>(cur_row, cur_col) + dD.dot(offset) / 2;
 	if (abs(Dx) < SIFT_CONTR_THR)
 		return NULL;
 
@@ -499,9 +515,13 @@ key_point* SIFT::interpolateExtrema(int octave, int interval, int row, int colum
 		// the keypoint's actual coordinate in the image
 		double x = (cur_col + offset_c) * pow(2.0, octave);
 		double y = (cur_row + offset_r) * pow(2.0, octave);
+
 		key_point kp = { x, y, octave, cur_interval, 0.0, NULL };
+
 		return &kp;
 	}
+	else
+		return NULL;
 }
 
 // eliminate edge responses
@@ -509,19 +529,19 @@ bool SIFT::isEdge(int octave, int interval, int row, int column) {
 	int layer_index = octave * (scale + 2) + interval + 1;
 
 	// the principal curvatures can be computed from a 2 * 2 hessian matrix
-	float dxx = DoGs[layer_index].at<float>(row, column + 1) +
-		DoGs[layer_index].at<float>(row, column - 1) -
-		DoGs[layer_index].at<float>(row, column) * 2;
-	float dyy = DoGs[layer_index].at<float>(row + 1, column) +
-		DoGs[layer_index].at<float>(row - 1, column) -
-		DoGs[layer_index].at<float>(row, column) * 2;
-	float dxy = (DoGs[layer_index].at<float>(row + 1, column + 1) -
-		DoGs[layer_index].at<float>(row + 1, column - 1) -
-		DoGs[layer_index].at<float>(row - 1, column + 1) -
-		DoGs[layer_index].at<float>(row - 1, column - 1)) / 4;
+	double dxx = DoGs[layer_index].at<double>(row, column + 1) +
+		DoGs[layer_index].at<double>(row, column - 1) -
+		DoGs[layer_index].at<double>(row, column) * 2;
+	double dyy = DoGs[layer_index].at<double>(row + 1, column) +
+		DoGs[layer_index].at<double>(row - 1, column) -
+		DoGs[layer_index].at<double>(row, column) * 2;
+	double dxy = (DoGs[layer_index].at<double>(row + 1, column + 1) -
+		DoGs[layer_index].at<double>(row + 1, column - 1) -
+		DoGs[layer_index].at<double>(row - 1, column + 1) +
+		DoGs[layer_index].at<double>(row - 1, column - 1)) / 4;
 
-	float trace = dxx + dyy;
-	float det = dxx * dyy - dxy * dxy;
+	double trace = dxx + dyy;
+	double det = dxx * dyy - dxy * dxy;
 
 	//if the curvatures have different signs, the point is discarded as not being an extremum
 	if (det <= 0)
