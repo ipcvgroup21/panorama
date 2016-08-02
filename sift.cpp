@@ -12,8 +12,8 @@ Function:    // SIFT
 Description: // Constructor of class SIFT
 Calls:
 Inputs:      // src, input image
-// sigma, the parameter of Gaussian
-// scale, the height of scale space
+			 // sigma, the parameter of Gaussian
+			 // scale, the height of scale space
 **************************************************/
 SIFT::SIFT(Mat& img, int octave, int scale, double sigma){
 	// Initial the parameters
@@ -38,7 +38,7 @@ Function:    convertRGBToGray64F
 Description: // convert the input RGB image to a
 64F Gray image
 Inputs:      // src, input image
-// dst, output image
+			 // dst, output image
 **************************************************/
 void SIFT::convertRGBToGray64F(const Mat& src, Mat& dst){
 	// Determine the type of input image
@@ -69,8 +69,8 @@ Description: // Use linear interpolation to up sample
 the input image and convert its result
 to the output image
 Inputs:      // src, input gray image and its bit depth
-is CV_64F
-// dst, output image
+				is CV_64F
+			 // dst, output image
 **************************************************/
 void SIFT::upSample(const Mat& src, Mat& dst){
 	// Determine the type of input image
@@ -87,8 +87,8 @@ void SIFT::upSample(const Mat& src, Mat& dst){
 	dst = cvCreateMat(src.rows * 2, src.cols * 2, CV_64F);
 
 	// Up sample with  linear interpolation
-	for(int srcX = 0; srcX < src.rows ; srcX++){
-		for (int srcY = 0; srcY < src.cols ; srcY++){
+	for(int srcX = 0; srcX < src.rows - 1; srcX++){
+		for (int srcY = 0; srcY < src.cols - 1; srcY++){
 			((double*)dst.data)[(srcX * 2) * dst.cols + (srcY * 2)] = ((double*)src.data)[srcX * src.cols + srcY];
 			// interpolate x
 			double dx = ((double*)src.data)[srcX * src.cols + srcY] + ((double*)src.data)[(srcX + 1) * src.cols + srcY];
@@ -104,6 +104,18 @@ void SIFT::upSample(const Mat& src, Mat& dst){
 			((double*)dst.data)[(srcX * 2 + 1) * dst.cols + (srcY * 2 + 1)] = dxy / 4.0;
 		}
 	}
+	
+	if(dst.cols < 3 || dst.rows < 3 )
+		return;
+	// The last two cols & last two rows
+	for(int row = 0; row < dst.rows; row++){
+		((double*)dst.data)[row * dst.cols + dst.cols - 2] = ((double*)src.data)[(row /2) * src.cols + src.cols - 1];
+		((double*)dst.data)[row * dst.cols + dst.cols - 1] = ((double*)src.data)[(row /2) * src.cols + src.cols - 1];
+	}
+	for(int col = 0; col < dst.cols; col++){
+		((double*)dst.data)[(dst.rows - 2) * dst.cols + col] = ((double*)src.data)[(src.rows - 1) + col / 2];
+		((double*)dst.data)[(dst.rows - 1) * dst.cols + col] = ((double*)src.data)[(src.rows - 1) + col / 2];
+	}
 }
 
 
@@ -112,8 +124,8 @@ Function:    downSample
 Description: // Down sample the input image and convert
 its result to the output image
 Inputs:      // src, input gray image and its bit depth
-is CV_64F
-// dst, output image
+				is CV_64F
+			 // dst, output image
 **************************************************/
 void SIFT::downSample(const Mat& src, Mat& dst){
 	// Determine the type of input image
@@ -145,11 +157,11 @@ void SIFT::downSample(const Mat& src, Mat& dst){
 Function:    convolve
 Description: // Convolution of the input image with the filter
 Inputs:      // src, input gray image and its bit depth
-is CV_64F
-// filter
-// dst, output image
-// a, the width of the filter
-// b, the height of the filter
+				is CV_64F
+			 // filter
+			 // dst, output image
+			 // a, the width of the filter
+			 // b, the height of the filter
 **************************************************/
 void SIFT::convolve(const Mat& src, double filter[], Mat& dst, int a, int b){
 	// Initialization
@@ -188,9 +200,9 @@ void SIFT::convolve(const Mat& src, double filter[], Mat& dst, int a, int b){
 Function:    gaussianSmoothing
 Description: // Gaussian Smoothing of the input image
 Inputs:      // src, input gray image and its bit depth
-is CV_64F
-// dst, output image
-// sigma
+				is CV_64F
+			 // dst, output image
+			 // sigma
 **************************************************/
 void SIFT::gaussianSmoothing(const Mat& src, Mat& dst, double sigma){
 	// Generate the gaussian mask
@@ -207,9 +219,9 @@ void SIFT::gaussianSmoothing(const Mat& src, Mat& dst, double sigma){
 Function:    gaussianSmoothing
 Description: // Gaussian Smoothing of the input image
 Inputs:      // src, input gray image and its bit depth
-is CV_64F
-// dst, output image
-// sigma
+				is CV_64F
+			 // dst, output image
+			 // sigma
 **************************************************/
 void SIFT::substruction(const Mat& src1, const Mat& src2, Mat& dst){
 	if (src1.cols != src2.cols || src1.cols != src2.cols){
@@ -279,14 +291,15 @@ Mat* SIFT::generateGaussianPyramid(Mat& src, int octaves, int scales, double sig
 	} 
 	 
 	// Test:
-	 /*for(int i = 0; i < this->octave * intervalGaus; i++){
+	/*for(int i = 0; i < this->octave * intervalGaus; i++){
 		char buffer[20];
 		itoa(i,buffer,10);
 		string number(buffer);
 		string name = "Image " + number;
 		namedWindow(name);  
 		imshow(name,gaussPyr[i]); 
-	}*/
+	}
+*/
 
 	return gaussPyr;
 }
