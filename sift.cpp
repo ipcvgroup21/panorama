@@ -25,8 +25,8 @@ SIFT::SIFT(Mat& img, int octave, int scale, double sigma){
 	this->gausPyr = generateGaussianPyramid(img, octave, scale, sigma);
 	this->DoGs = generateDoGPyramid(this->gausPyr, octave, scale, sigma);
 	this->features = findKeypoints();
-	this->mag_Pyrimad = new Mat[octave*(scale+3)];
-    this->ori_Pyrimad = new Mat[octave*(scale+3)];
+	this->mag_Pyramid = new Mat[octave*(scale+3)];
+    this->ori_Pyramid = new Mat[octave*(scale+3)];
     for(int i=0;i<octave;i++)
     	for(int j=0;j<scale+3;j++)
     		GetOriAndMag(i,j);
@@ -61,7 +61,7 @@ SIFT::SIFT(Mat& img, int octave, int scale, double sigma){
 
 	for(int i=0;i<features.size();i++)
 	{
-		features[i].v = GetVector(features[i]);
+		GetVector(features[i]);
 	}
 
 
@@ -121,8 +121,8 @@ void SIFT::upSample(const Mat& src, Mat& dst){
 	dst = cvCreateMat(src.rows * 2, src.cols * 2, CV_64F);
 
 	// Up sample with  linear interpolation
-	for(int srcX = 0; srcX < src.rows ; srcX++){
-		for (int srcY = 0; srcY < src.cols ; srcY++){
+	for(int srcX = 0; srcX < src.rows - 1; srcX++){
+		for (int srcY = 0; srcY < src.cols - 1; srcY++){
 			((double*)dst.data)[(srcX * 2) * dst.cols + (srcY * 2)] = ((double*)src.data)[srcX * src.cols + srcY];
 			// interpolate x
 			double dx = ((double*)src.data)[srcX * src.cols + srcY] + ((double*)src.data)[(srcX + 1) * src.cols + srcY];
@@ -137,6 +137,17 @@ void SIFT::upSample(const Mat& src, Mat& dst){
 				+ ((double*)src.data)[srcX * src.cols + (srcY + 1)] + ((double*)src.data)[(srcX + 1) * src.cols + (srcY + 1)];
 			((double*)dst.data)[(srcX * 2 + 1) * dst.cols + (srcY * 2 + 1)] = dxy / 4.0;
 		}
+	}
+	if (dst.cols < 3 || dst.rows < 3)
+		return;
+	// The last two cols & last two rows
+	for (int row = 0; row < dst.rows; row++) {
+		((double*)dst.data)[row * dst.cols + dst.cols - 2] = ((double*)src.data)[(row / 2) * src.cols + src.cols - 1];
+		((double*)dst.data)[row * dst.cols + dst.cols - 1] = ((double*)src.data)[(row / 2) * src.cols + src.cols - 1];
+	}
+	for (int col = 0; col < dst.cols; col++) {
+		((double*)dst.data)[(dst.rows - 2) * dst.cols + col] = ((double*)src.data)[(src.rows - 1) + col / 2];
+		((double*)dst.data)[(dst.rows - 1) * dst.cols + col] = ((double*)src.data)[(src.rows - 1) + col / 2];
 	}
 }
 
@@ -287,6 +298,17 @@ Mat* SIFT::generateGaussianPyramid(Mat& src, int octaves, int scales, double sig
 	for(int i = 1; i < intervalGaus; i++){
 		sigmas[i] = sigmas[i - 1] * k;
 	}
+
+	this->sigma = new double[octave*intervalGaus];
+	for (int i = 0; i < intervalGaus; i++)
+		this->sigma[i] = sigmas[i];
+	for(int i = 1 ; i < octave ; i++)
+		for (int j = 0; j < intervalGaus; j++) {
+			if (j == 0)
+				this->sigma[i*intervalGaus] = this->sigma[i*intervalGaus - 3];
+			else
+				this->sigma[i*intervalGaus + j] = this->sigma[i*intervalGaus + j - 1] * k;
+		}
 
 	// Generate smoothing images in the first octave
 	for (int i = 0; i < intervalGaus; i++){
@@ -592,20 +614,21 @@ bool SIFT::isEdge(int octave, int interval, int row, int column) {
 void SIFT::GetOriAndMag(int oct_id, int scale_id)
 {
 	double PI=3.14159265358;
-	Mat origin=Pyramid[oct_id*6+scale_id];
-	int w = origin.width(), h = origin.height();
-	mag_Pyramid[oct_id*6+scale_id]= Mat(h,w,CV_64FC1,0);
+	Mat origin= gausPyr[oct_id*6+scale_id];
+	int w = origin.cols; 
+	int h = origin.rows;
+	this->mag_Pyramid[oct_id*6+scale_id]= Mat(h,w,CV_64FC1,0);
 	ori_Pyramid[oct_id*6+scale_id]= Mat(h,w,CV_64FC1,0);
-	for(y=0;y<h;y++)
+	for(int y=0;y<h;y++)
 	{
-		double *mag_row = mag_Pyramid[oct_id*6+scale_id].pty(y);
-		double *ori_row = ori_Pyramid[oct_id*6+scale_id].pty(y);
-		double *origin_row = origin.pty(y), *origin_uprow = origin.pty(y+1), *origin_downrow = origin.pty(y-1);
+		double *mag_row = mag_Pyramid[oct_id*6+scale_id].ptr<double>(y);
+		double *ori_row = ori_Pyramid[oct_id*6+scale_id].ptr<double>(y);
+		double *origin_row = origin.ptr<double>(y), *origin_uprow = origin.ptr<double>(y+1), *origin_downrow = origin.ptr<double>(y-1);
 
 		mag_row[0]=0;
 		ori_row[0]=PI;
 
-		for(x=1;x<w-1;x++)
+		for(int x=1;x<w-1;x++)
 		{
 			if(y>0 && y<h-1)
 			{
@@ -633,37 +656,37 @@ std::vector<double> SIFT::OrientationAssignment(key_point p)
 	Mat ori_img=ori_Pyramid[p.oct_id*6+p.scale_id];
 	Mat mag_img=mag_Pyramid[p.oct_id*6+p.scale_id];
 	double PI=3.14159265358;
-	int r=round(p.sigma*4.5);
+	int r=round(this->sigma[p.oct_id*6+p.scale_id] *4.5);
 	double hist[36];
 	for(int i=0;i<36;i++) hist[i]=0;
 
 	for(int xx=-r;xx<=r;xx++)
 	{
 		int x=p.x+xx;
-		if(x<=0 || x>=ori_img.width()-1) continue;
+		if(x<=0 || x>=ori_img.cols-1) continue;
 		for(int yy=-r;yy<=r;yy++)
 		{
 			int y=p.y+yy;
-			if(y<=0 || y>=ori_img.height()-1) continue;
+			if(y<=0 || y>=ori_img.rows-1) continue;
 			if(sqr(xx)+sqr(yy)>sqr(r)) continue;
-			double ori=ori_img.at(y,x);
+			double ori=ori_img.at<double>(y,x);
 			int bin=round(ori/PI*180.0/10.0);
 			if (bin==36) bin=0;
-			hist[bin]+=mag_img.at(y,x)*exp( -(sqr(xx)+sqr(yy)) / (2*sqr(1.5*p.sigma)) );
+			hist[bin]+=mag_img.at<double>(y,x)*exp( -(sqr(xx)+sqr(yy)) / (2*sqr(1.5*this->sigma[p.oct_id * 6 + p.scale_id])) );
 
 		}
 	}
 
-	for(i=0;i<2;i++)
+	for(int i=0;i<2;i++)
 	{
 		double hist_tmp[36];
-		for(j=0;j<36;j++)
+		for(int j=0;j<36;j++)
 		{
 			double prev=hist[j==0? 35:j-1];
 			double next=hist[j==35? 0:j+1];
 			hist_tmp[j]=hist[j]*0.5+(prev+next)*0.25;
 		}
-		for(j=0;j<36;j++)
+		for(int j=0;j<36;j++)
 		{
 			hist[j]=hist_tmp[j];
 		}
@@ -679,8 +702,8 @@ std::vector<double> SIFT::OrientationAssignment(key_point p)
 
 	for(int i=0;i<36;i++)
 	{
-		double prev=hist[j==0? 35:j-1];
-		double next=hist[j==35? 0:j+1];
+		double prev=hist[i==0? 35:i-1];
+		double next=hist[i==35? 0:i+1];
 
 		if(hist[i]>threshold && hist[i]>prev && hist[i]>next)
 		{
@@ -699,15 +722,15 @@ std::vector<double> SIFT::OrientationAssignment(key_point p)
 }
 
 
-std::vector<double> SIFT::GetVector(key_point p)
+void SIFT::GetVector(key_point p)
 {
 	double PI=3.14159265358;
 	Mat mag_img=mag_Pyramid[p.oct_id*6+p.scale_id];
 	Mat ori_img=ori_Pyramid[p.oct_id*6+p.scale_id];
-	int w=ori_img.width(), h=ori_img.height();
+	int w=ori_img.cols, h=ori_img.rows;
 
 	double ori=p.orientation;
-	int r=round(sqrt(0.5)*3*p.sigma*(4+1));
+	int r=round(sqrt(0.5)*3*this->sigma[p.oct_id * 6 + p.scale_id]*(4+1));
 	double hist[16][8];
 	for(int i=0;i<16;i++)
 		for(int j=0;j<8;j++)
@@ -725,16 +748,16 @@ std::vector<double> SIFT::GetVector(key_point p)
 			if(y<=0 || y>=h-1) continue;
 			if(sqr(xx)+sqr(yy)>sqr(r)) continue;
 
-			double bin_y = (-xx*sin_part+yy*cos_part)/(3.0*p.sigma)+1.5;
-			double bin_x = (xx*cos_part +yy*sin_part)/(3.0*p.sigma)+1.5;
+			double bin_y = (-xx*sin_part+yy*cos_part)/(3.0*this->sigma[p.oct_id * 6 + p.scale_id])+1.5;
+			double bin_x = (xx*cos_part +yy*sin_part)/(3.0*this->sigma[p.oct_id * 6 + p.scale_id])+1.5;
 
 			if(bin_y<-1 || bin_y>=4 || bin_x<-1 || bin_x>=4) continue;
 
-			double ori_loc = ori_img.at(y,x);
-			double mag_loc = mag_img.at(y,x);
+			double ori_loc = ori_img.at<double>(y,x);
+			double mag_loc = mag_img.at<double>(y,x);
 
 			double w_mag = mag_loc * exp( -(sqr(xx)+sqr(yy)) / 8 );
-			double r_ori -= ori;
+			double r_ori = ori_loc -  ori;
 
 			if(r_ori<0) r_ori += 2*PI;
 
@@ -761,7 +784,9 @@ std::vector<double> SIFT::GetVector(key_point p)
 	sum=sqrt(sum);
     for(int i=0;i<128;i++) result[i]/=sum;
 
-    return result;
+	p.v = new std::vector<double>;
+	for (int i = 0; i < 128; i++)
+		p.v->push_back(result[i]);
 }
 
 
@@ -780,7 +805,7 @@ void SIFT::TriInterpolation(double x, double y, double h, double w_mag, double h
 		if((yf+i)>=0 && (yf+i)<4)
 		{
 			double wy = w_mag * (i? delta_y : 1-delta_y);
-			for(j=0;j<2;j++)
+			for(int j=0;j<2;j++)
 			{
 				if((xf+j)>=0 && (xf+j)<4)
 				{
@@ -791,4 +816,9 @@ void SIFT::TriInterpolation(double x, double y, double h, double w_mag, double h
 			}
 		}
 	}
+}
+
+double SIFT::sqr(double a)
+{
+	return a*a;
 }
