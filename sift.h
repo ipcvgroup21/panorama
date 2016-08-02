@@ -94,5 +94,9 @@ class GaussianMask{
 		double* getFullMask(){ return fullMask;}
 		int getSize(){return maskSize;}
 };
+
+
+
+
 #endif
 

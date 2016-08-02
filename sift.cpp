@@ -58,11 +58,13 @@ SIFT::SIFT(Mat& img, int octave, int scale, double sigma){
 		cout << features.size() << endl;
 	}
 	/**********testing**********/
+/*
 
 	for(int i=0;i<features.size();i++)
 	{
 		GetVector(features[i]);
 	}
+*/
 
 
 }
@@ -656,7 +658,7 @@ std::vector<double> SIFT::OrientationAssignment(key_point p)
 	Mat ori_img=ori_Pyramid[p.oct_id*6+p.scale_id];
 	Mat mag_img=mag_Pyramid[p.oct_id*6+p.scale_id];
 	double PI=3.14159265358;
-	int r=round(this->sigma[p.oct_id*6+p.scale_id] *4.5);
+	int r=cvRound(this->sigma[p.oct_id*6+p.scale_id] *4.5);
 	double hist[36];
 	for(int i=0;i<36;i++) hist[i]=0;
 
@@ -670,7 +672,7 @@ std::vector<double> SIFT::OrientationAssignment(key_point p)
 			if(y<=0 || y>=ori_img.rows-1) continue;
 			if(sqr(xx)+sqr(yy)>sqr(r)) continue;
 			double ori=ori_img.at<double>(y,x);
-			int bin=round(ori/PI*180.0/10.0);
+			int bin=cvRound(ori/PI*180.0/10.0);
 			if (bin==36) bin=0;
 			hist[bin]+=mag_img.at<double>(y,x)*exp( -(sqr(xx)+sqr(yy)) / (2*sqr(1.5*this->sigma[p.oct_id * 6 + p.scale_id])) );
 
@@ -730,7 +732,7 @@ void SIFT::GetVector(key_point p)
 	int w=ori_img.cols, h=ori_img.rows;
 
 	double ori=p.orientation;
-	int r=round(sqrt(0.5)*3*this->sigma[p.oct_id * 6 + p.scale_id]*(4+1));
+	int r= cvRound(sqrt(0.5)*3*this->sigma[p.oct_id * 6 + p.scale_id]*(4+1));
 	double hist[16][8];
 	for(int i=0;i<16;i++)
 		for(int j=0;j<8;j++)
