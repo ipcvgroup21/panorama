@@ -13,7 +13,7 @@ Description: Extract SIFT features.
 #include <opencv2/core/core.hpp>  
 #include <opencv2/highgui/highgui.hpp>  
 #include <math.h>
-#include <cv.h>
+#include <opencv/cv.h>
 
 using namespace cv;  
 using namespace std;
@@ -51,7 +51,10 @@ class SIFT{
 		int octave;  /* number of octaves */
 		int scale; 
 		//double sigma; 
-		//vector<Keypoint> features;
+		vector<key_point> features;
+		Mat* mag_Pyramid;
+		Mat* ori_Pyramid;
+		double* sigma;
 
 	public:
 		SIFT(Mat& img, int octave, int scale, double sigma);
@@ -72,6 +75,13 @@ class SIFT{
 		bool isExtremum(int octave, int interval, int row, int column);
 		key_point* interpolateExtrema(int octave, int interval, int row, int column);
 		bool isEdge(int octave, int interval, int row, int column);	
+
+		void GetOriAndMag(int oct_id, int scale_id);
+		std::vector<double> OrientationAssignment(key_point p);
+		void GetVector(key_point p);
+		void TriInterpolation(double x, double y, double h, double w_mag, double hist[][8]);
+		double sqr(double a);
+
 };
 
 class GaussianMask{
@@ -85,5 +95,6 @@ class GaussianMask{
 		double* getFullMask(){ return fullMask;}
 		int getSize(){return maskSize;}
 };
+
 #endif
 
