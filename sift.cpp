@@ -26,6 +26,31 @@ SIFT::SIFT(Mat& img, int octave, int scale, double sigma){
 	this->DoGs = generateDoGPyramid(this->gausPyr, octave, scale, sigma);
 
 	this->features = findKeypoints();
+	Scalar color[3] = {Scalar(0,0,255),Scalar(0,255,0),Scalar(255,0,0)};
+	for (int i = 0; i < features.size(); i++) {
+		/*
+			double x = features[i].x;
+			double y = features[i].y;
+			circle(this->DoGs[features[i].oct_id  * (scale + 2)], Point(x, y),2.0, Scalar(0,0,1),1,8);
+			cout << features[i].oct_id << endl;
+			*/
+		double x = features[i].x * pow(2.0, (features[i].oct_id-1));
+		double y = features[i].y * pow(2.0, (features[i].oct_id-1));
+		circle(img, Point(x, y),2.0, color[features[i].oct_id],-1,8);
+	}
+	imshow("Image",img);
+	/*
+	for(int i = 0; i < this->octave * (scale + 2);){
+		char buffer[20];
+		itoa(i,buffer,10);
+		string number(buffer);
+		string name = "Image " + number;
+		namedWindow(name);  
+		imshow(name,this->DoGs[i]); 
+		i = i + 1;
+	}
+	*/
+
 	this->mag_Pyramid = new Mat[octave*(scale+3)];
     this->ori_Pyramid = new Mat[octave*(scale+3)];
     for(int i=0;i<octave;i++)
@@ -53,12 +78,14 @@ SIFT::SIFT(Mat& img, int octave, int scale, double sigma){
     	}
     }
 
-	/**********testing**********/
-	if (features.size() != 0) {
-		cout << "sucess" << endl;
-		cout << features.size() << endl;
+	/*
+	for (int i = 0; i < features.size(); i++) {
+		double x = features[i].x * pow(2.0, features[i].oct_id);
+		double y = features[i].y * pow(2.0, features[i].oct_id);
+		circle(img, Point(x, y),1.0, Scalar(0,0,255),1,8);
 	}
-	/**********testing**********/
+	imshow("Image",img);
+	*/
 /*
 
 	for(int i=0;i<features.size();i++)
@@ -260,7 +287,7 @@ Inputs:      // src, input gray image and its bit depth
 			 // sigma
 **************************************************/
 void SIFT::substruction(const Mat& src1, const Mat& src2, Mat& dst){
-	if (src1.cols != src2.cols || src1.cols != src2.cols){
+	if (src1.cols != src2.cols || src1.rows != src2.rows){
 		cout << "The sizes are not same." << endl;
 		return;
 	}
@@ -339,8 +366,8 @@ Mat* SIFT::generateGaussianPyramid(Mat& src, int octaves, int scales, double sig
 	} 
 	 
 	// Test:
-
-	 /*for(int i = 0; i < this->octave * intervalGaus; i++){
+	/*
+	 for(int i = 0; i < this->octave * intervalGaus; i++){
 		char buffer[20];
 		itoa(i,buffer,10);
 		string number(buffer);
@@ -348,7 +375,7 @@ Mat* SIFT::generateGaussianPyramid(Mat& src, int octaves, int scales, double sig
 		namedWindow(name);  
 		imshow(name,gaussPyr[i]); 
 	}
-*/
+	*/
 
 	return gaussPyr;
 }
@@ -379,7 +406,8 @@ Mat* SIFT::generateDoGPyramid(Mat* gaussPyr, int octaves, int scales, double sig
 	}
 
 	// Test:
-	/*for(int i = 0; i < this->octave * intervalDoGs; i++){
+	/*
+	for(int i = 0; i < this->octave * intervalDoGs; i++){
 		char buffer[20];
 		itoa(i,buffer,10);
 		string number(buffer);
@@ -387,7 +415,7 @@ Mat* SIFT::generateDoGPyramid(Mat* gaussPyr, int octaves, int scales, double sig
 		namedWindow(name);  
 		imshow(name,dogPyr[i]); 
 	}
-	 */
+	*/
 	return dogPyr;
 }
 
@@ -575,8 +603,8 @@ key_point* SIFT::interpolateExtrema(int octave, int interval, int row, int colum
 
 	if (!isEdge(octave, cur_interval, cur_row, cur_col)) {
 		// the keypoint's actual coordinate in the image
-		double x = (cur_col + offset_c) * pow(2.0, octave);
-		double y = (cur_row + offset_r) * pow(2.0, octave);
+		double x = (cur_col + offset_c);
+		double y = (cur_row + offset_r);
 
 		key_point kp = { x, y, octave, cur_interval, 0.0, NULL };
 
@@ -623,36 +651,36 @@ void SIFT::GetOriAndMag(int oct_id, int scale_id)
 	Mat origin= gausPyr[oct_id*6+scale_id];
 	int w = origin.cols; 
 	int h = origin.rows;
-	this->mag_Pyramid[oct_id*6+scale_id]= Mat(h,w,CV_64FC1,0);
-	ori_Pyramid[oct_id*6+scale_id]= Mat(h,w,CV_64FC1,0);
+	mag_Pyramid[oct_id*6+scale_id].create(h,w,CV_64FC1);
+	ori_Pyramid[oct_id*6+scale_id].create(h,w,CV_64FC1);
+	
+	Mat mag = mag_Pyramid[oct_id*6+scale_id];
+	Mat ori = ori_Pyramid[oct_id*6+scale_id];
+	
 	for(int y=0;y<h;y++)
 	{
-		double *mag_row = mag_Pyramid[oct_id*6+scale_id].ptr<double>(y);
-		double *ori_row = ori_Pyramid[oct_id*6+scale_id].ptr<double>(y);
-		double *origin_row = origin.ptr<double>(y), *origin_uprow = origin.ptr<double>(y+1), *origin_downrow = origin.ptr<double>(y-1);
-
-		mag_row[0]=0;
-		ori_row[0]=PI;
+		((double*)mag.data)[y*w]=0;
+		((double*)ori.data)[y*w]=PI;
 
 		for(int x=1;x<w-1;x++)
 		{
 			if(y>0 && y<h-1)
 			{
-				double dy=origin_uprow[x]-origin_downrow[x];
-				double dx=ori_row[x+1]-ori_row[x-1];
-				mag_row[x]=sqrt(dx*dx+dy*dy);
-				ori_row[x]=atan2(dy,dx);
-				if(ori_row[x]<0) ori_row[x] += 2*PI;
+				double dy=((double*)origin.data)[(y+1)*w+x]-((double*)origin.data)[(y-1)*w+x];
+				double dx=((double*)origin.data)[y*w+x+1]-((double*)origin.data)[y*w+x-1];
+				((double*)mag.data)[y*w+x]=sqrt(dx*dx+dy*dy);
+				((double*)ori.data)[y*w+x]= (dy==0 && dx==0) ? 0:atan2(dy,dx);
+				if(((double*)ori.data)[y*w+x]<0) ((double*)ori.data)[y*w+x] += 2*PI;
 			}
 			else
 			{
-				mag_row[x]=0;
-				ori_row[x]=PI;
+				((double*)mag.data)[y*w+x]=0;
+				((double*)ori.data)[y*w+x]=PI;
 			}
 		}
 
-		mag_row[w-1]=0;
-		ori_row[w-1]=PI;
+		((double*)mag.data)[y*w+w-1]=0;
+		((double*)ori.data)[y*w+w-1]=PI;
 	}
 }
 

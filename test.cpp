@@ -11,7 +11,7 @@ using namespace std;
   
 int main()  
 {  
-    Mat img = imread("jobs.jpg");  
+    Mat img = imread("1.jpg");  
 	SIFT testImg(img,3,3, 1.6);
 	
 	waitKey(6000);  	

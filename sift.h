@@ -27,7 +27,7 @@ using namespace std;
 
 #define SIFT_MAX_INTERP_STEPS 5
 
-#define SIFT_CONTR_THR 0.04f
+#define SIFT_CONTR_THR 0.0005f
 
 #define SIFT_CURV_THR 10.f
 
