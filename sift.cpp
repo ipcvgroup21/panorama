@@ -98,8 +98,7 @@ SIFT::SIFT(Mat& img, int octave, int scale, double sigma){
 
 /*************************************************
 Function:    convertRGBToGray64F
-Description: // convert the input RGB image to a
-64F Gray image
+Description: // convert the input RGB image to a 64F Gray image
 Inputs:      // src, input image
 			 // dst, output image
 **************************************************/
@@ -128,8 +127,7 @@ void SIFT::convertRGBToGray64F(const Mat& src, Mat& dst){
 
 /*************************************************
 Function:    upSample
-Description: // Use linear interpolation to up sample
-the input image and convert its result
+Description: // Use linear interpolation to up sample the input image and convert its result
 to the output image
 Inputs:      // src, input gray image and its bit depth
 				is CV_64F
@@ -184,11 +182,9 @@ void SIFT::upSample(const Mat& src, Mat& dst){
 
 /*************************************************
 Function:    downSample
-Description: // Down sample the input image and convert
-its result to the output image
-Inputs:      // src, input gray image and its bit depth
-is CV_64F
-// dst, output image
+Description: // Down sample the input image and convert its result to the output image
+Inputs:      // src, input gray image and its bit depth is CV_64F
+			 // dst, output image
 **************************************************/
 void SIFT::downSample(const Mat& src, Mat& dst){
 	// Determine the type of input image
@@ -219,8 +215,7 @@ void SIFT::downSample(const Mat& src, Mat& dst){
 /*************************************************
 Function:    convolve
 Description: // Convolution of the input image with the filter
-Inputs:      // src, input gray image and its bit depth
-				is CV_64F
+Inputs:      // src, input gray image and its bit depth is CV_64F
 			 // filter
 			 // dst, output image
 			 // a, the width of the filter
@@ -262,8 +257,7 @@ void SIFT::convolve(const Mat& src, double filter[], Mat& dst, int a, int b){
 /*************************************************
 Function:    gaussianSmoothing
 Description: // Gaussian Smoothing of the input image
-Inputs:      // src, input gray image and its bit depth
-				is CV_64F
+Inputs:      // src, input gray image and its bit depth is CV_64F
 			 // dst, output image
 			 // sigma
 **************************************************/
@@ -279,14 +273,14 @@ void SIFT::gaussianSmoothing(const Mat& src, Mat& dst, double sigma){
 
 
 /*************************************************
-Function:    gaussianSmoothing
-Description: // Gaussian Smoothing of the input image
-Inputs:      // src, input gray image and its bit depth
-				is CV_64F
+Function:    Subtraction
+Description: // Calculate the difference, the first input image sub the second image
+Inputs:      // src1, input gray image and its bit depth is CV_64F
+			 // src2
 			 // dst, output image
 			 // sigma
 **************************************************/
-void SIFT::substruction(const Mat& src1, const Mat& src2, Mat& dst){
+void SIFT::subtraction(const Mat& src1, const Mat& src2, Mat& dst){
 	if (src1.cols != src2.cols || src1.rows != src2.rows){
 		cout << "The sizes are not same." << endl;
 		return;
@@ -304,8 +298,7 @@ void SIFT::substruction(const Mat& src1, const Mat& src2, Mat& dst){
 /*************************************************
 Function:    generateGaussianPyramid
 Description: // generate the Gaussian Pyramid
-Inputs:      // src, input gray image and its bit depth
-			    is CV_64F
+Inputs:      // src, input gray image and its bit depth is CV_64F
 		     // octaves, the number of octaves
 			 // scale, the height of scale space
 			 // sigma, the parameter of Gaussian
@@ -318,9 +311,9 @@ Mat* SIFT::generateGaussianPyramid(Mat& src, int octaves, int scales, double sig
 	Mat* gaussPyr = new Mat[octaves * intervalGaus];
 
 	// Convert to Gray image and Up sample 
-	Mat initGrayImg, initUpSampling;
+	Mat initGrayImg; //, initUpSampling;
 	convertRGBToGray64F(src, initGrayImg);
-	upSample(initGrayImg, initUpSampling);
+	//upSample(initGrayImg, initUpSampling);
 
 	// Generate a list of series of sigma
 	double *sigmas = new double[intervalGaus];
@@ -345,7 +338,8 @@ Mat* SIFT::generateGaussianPyramid(Mat& src, int octaves, int scales, double sig
 	for (int i = 0; i < intervalGaus; i++){
 		Mat smoothing;
 		if(i == 0)
-			gaussianSmoothing(initUpSampling, smoothing, sigmas[i]);
+			//gaussianSmoothing(initUpSampling, smoothing, sigmas[i]);
+			gaussianSmoothing(initGrayImg, smoothing, sigmas[i]);
 		else
 			gaussianSmoothing(gaussPyr[i-1], smoothing, sigmas[i]);
 		gaussPyr[i] = smoothing;
@@ -384,8 +378,7 @@ Mat* SIFT::generateGaussianPyramid(Mat& src, int octaves, int scales, double sig
 /*************************************************
 Function:    generateDoGPyramid
 Description: // generate the DoG Pyramid
-Inputs:      // src, input gray image and its bit depth
-				is CV_64F
+Inputs:      // src, input gray image and its bit depth is CV_64F
 			 // octaves, the number of octaves
 			 // scale, the height of scale space
 			 // sigma, the parameter of Gaussian
@@ -400,7 +393,7 @@ Mat* SIFT::generateDoGPyramid(Mat* gaussPyr, int octaves, int scales, double sig
 		for(int j = 0; j < intervalDoGs; j++){
 			int number = i * intervalGaus + j;
 			Mat subImg;
-			substruction(gaussPyr[i * intervalGaus + j + 1], gaussPyr[i * intervalGaus + j], subImg);
+			subtraction(gaussPyr[i * intervalGaus + j + 1], gaussPyr[i * intervalGaus + j], subImg);
 			dogPyr[i * intervalDoGs + j] = subImg;
 		}
 	}

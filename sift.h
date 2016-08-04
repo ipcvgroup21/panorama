@@ -67,7 +67,7 @@ class SIFT{
 		void downSample(const Mat& src, Mat& dst);
 		void convolve(const Mat& src, double filter[], Mat& dst, int a, int b);
 		void gaussianSmoothing(const Mat& src, Mat& dst, double sigma);
-		void substruction(const Mat& src1, const Mat& src2, Mat& dst);
+		void subtraction(const Mat& src1, const Mat& src2, Mat& dst);
 		Mat* generateGaussianPyramid(Mat& src, int octaves, int scales, double sigma);
 		Mat* generateDoGPyramid(Mat* gaussPyr, int octaves, int scales, double sigma);
 		
