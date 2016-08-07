@@ -1,74 +1,50 @@
-/*************************************************
-Copyright: SIFT::panorama
-Author: Sally
-Date:2016-07-26
-Description: Implement Extract SIFT features.
-**************************************************/
-
 #include "mysift.h"
-  
-/*************************************************
-Function:    // SIFT
-Description: // Constructor of class SIFT
-Calls:
-Inputs:      // src, input image
-			 // sigma, the parameter of Gaussian
-			 // scale, the height of scale space
-**************************************************/
+#include "lib/imgproc.hh"
+#include "lodepng/lodepng.h"
+
 mySIFT::mySIFT(Mat<float>& img, int octave, int scale, double sigma){
 	// Initial the parameters
 	this->octave = octave;
 	this->scale = scale;
-
+	
 	// Construct the scale space
 	this->gausPyr = generateGaussianPyramid(img, octave, scale, sigma);
 	this->DoGs = generateDoGPyramid(this->gausPyr, octave, scale, sigma);
- 
+	//print_debug("start findkeypoints\n"); 
 	this->features = findKeypoints();
 	print_debug("find key points.\n");
-
-	//Scalar color[3] = {Scalar(0,0,255),Scalar(0,255,0),Scalar(255,0,0)};
-	//for (int i = 0; i < features.size(); i++) {
-	//	double x = features[i].x * pow(2.0, (features[i].oct_id-1));
-	//	double y = features[i].y * pow(2.0, (features[i].oct_id-1));
-	//	//circle(img, Point(x, y),2.0, color[features[i].oct_id],-1,8);
-	//}
 
 	delete[] DoGs;
 
 	this->mag_Pyramid = new Mat<float>[octave*(scale+3)];
-    this->ori_Pyramid = new Mat<float>[octave*(scale+3)];
-    for(int i=0;i<octave;i++)
-    	for(int j=0;j<scale+3;j++)
-    		GetOriAndMag(i,j);
-
-	/*if (features.size() != 0) {
-		cout << "sucess" << endl;
-		cout << features.size() << endl;
-	}*/
-
-    int num_keypoint = features.size();
-    for(int i=0;i<num_keypoint;i++)
-    {
-    	key_point tmp = features[i];
-    	std::vector<double> oris = OrientationAssignment(tmp);
-    	features[i].orientation=oris[0];
-    	for(int j=1;j<oris.size();j++)
+	this->ori_Pyramid = new Mat<float>[octave*(scale+3)];
+    	for(int i=0;i<octave;i++)
+    		for(int j=0;j<scale+3;j++)
+    			GetOriAndMag(i,j);
+	print_debug("getoriandmag\n");
+	int num_keypoint = features.size();
+	print_debug("number = %d\n", num_keypoint);
+    	for(int i=0;i<num_keypoint;i++)
     	{
-    		key_point p = tmp;
-    		p.orientation = oris[j];
-    		features.push_back(p);
+    		key_point tmp = features[i];
+    		std::vector<double> oris = OrientationAssignment(tmp);
+		print_debug("num_keypoint = %d\n",i);
+		if (oris.size() == 0) continue;
+    		features[i].orientation=oris[0];
+    		for(int j=1;j<oris.size();j++)
+    		{
+    			key_point p = tmp;
+    			p.orientation = oris[j];
+    			features.push_back(p);
+    		}
     	}
-    }
 	print_debug("number = %d\n", features.size());
-     for(int i=0;i<features.size();i++) GetVector(features[i]);
-
+     	for(int i=0;i<features.size();i++) GetVector(features[i]);
+	
+	print_debug("find features.\n");
 	delete[] mag_Pyramid;
 	delete[] ori_Pyramid;
 	delete[] gausPyr;
-	
-
-
 }
 
 Mat<float> mySIFT::convertRGBToGray(const Mat<float>& src){
@@ -83,91 +59,16 @@ Mat<float> mySIFT::convertRGBToGray(const Mat<float>& src){
 	//dst = cvCreateMat(src.rows, src.cols, CV_64F);
 
 	// Convert the image 
-	/*for (int x = 0; x < src.rows(); x++){
-		for (int y = 0; y < src.cols(); y++){
-			int b = (int)((uchar*)src.data)[x * src.step + src.channels() * y + 0];
-			int g = (int)((uchar*)src.data)[x * src.step + src.channels() * y + 1];
-			int r = (int)((uchar*)src.data)[x * src.step + src.channels() * y + 2];
-			// Scale the range from 0 to 1
-			((double*)dst.data)[x * dst.cols + y] = (double)(r + g + b) / (double)(255 * 3);
-		}
-	}*/
 	const float* srcdata = src.ptr();
 	float* dstdata = dst.ptr();
 	for(int i = 0; i < src.pixels(); i++){
 		dstdata[i] = (srcdata[i * 3 + 0] + srcdata[i * 3 + 1] + srcdata[i * 3 + 2]) / 3.0f;
 	}
-//	print_debug("convert to gray.\n");
 	return dst;
 }
 
-
-/*************************************************
-Function:    upSample
-Description: // Use linear interpolation to up sample the input image and convert its result
-to the output image
-Inputs:      // src, input gray image and its bit depth
-				is CV_64F
-			 // dst, output image
-**************************************************/
-/*
-
-void mySIFT::upSample(const Mat& src, Mat& dst){
-	// Determine the type of input image
-	if (src.channels() != 1){
-		cout << "The input image is not a gray image." << endl;
-		return;
-	}
-	if (src.type() != CV_64F){
-		cout << "The bit depth of input image is not CV_64F." << endl;
-		return;
-	}
-
-	// Initial the size of output image.
-	dst = cvCreateMat(src.rows * 2, src.cols * 2, CV_64F);
-
-	// Up sample with  linear interpolation
-	for(int srcX = 0; srcX < src.rows - 1; srcX++){
-		for (int srcY = 0; srcY < src.cols - 1; srcY++){
-			((double*)dst.data)[(srcX * 2) * dst.cols + (srcY * 2)] = ((double*)src.data)[srcX * src.cols + srcY];
-			// interpolate x
-			double dx = ((double*)src.data)[srcX * src.cols + srcY] + ((double*)src.data)[(srcX + 1) * src.cols + srcY];
-			((double*)dst.data)[(srcX * 2 + 1) * dst.cols + (srcY * 2)] = dx / 2.0;
-			// interpolate y
-			double dy = ((double*)src.data)[srcX * src.cols + srcY] + ((double*)src.data)[srcX * src.cols + (srcY + 1)];
-			((double*)dst.data)[(srcX * 2) * dst.cols + (srcY * 2 + 1)] = dy / 2.0;
-			// interpolate xy
-			/ *double dxy = ((double*)src.data)[srcX * src.cols + srcY] + ((double*)src.data)[(srcX + 1) * src.cols + (srcY + 1)];
-			((double*)dst.data)[(srcX * 2 + 1) * dst.cols + (srcY * 2 + 1)] = dxy / 2.0;* /
-			double dxy = ((double*)src.data)[srcX * src.cols + srcY] + ((double*)src.data)[(srcX + 1) * src.cols + srcY]
-				+ ((double*)src.data)[srcX * src.cols + (srcY + 1)] + ((double*)src.data)[(srcX + 1) * src.cols + (srcY + 1)];
-			((double*)dst.data)[(srcX * 2 + 1) * dst.cols + (srcY * 2 + 1)] = dxy / 4.0;
-		}
-	}
-
-	if (dst.cols < 3 || dst.rows < 3)
-		return;
-	// The last two cols & last two rows
-	for (int row = 0; row < dst.rows; row++) {
-		((double*)dst.data)[row * dst.cols + dst.cols - 2] = ((double*)src.data)[(row / 2) * src.cols + src.cols - 1];
-		((double*)dst.data)[row * dst.cols + dst.cols - 1] = ((double*)src.data)[(row / 2) * src.cols + src.cols - 1];
-	}
-	for (int col = 0; col < dst.cols; col++) {
-		((double*)dst.data)[(dst.rows - 2) * dst.cols + col] = ((double*)src.data)[(src.rows - 1) + col / 2];
-		((double*)dst.data)[(dst.rows - 1) * dst.cols + col] = ((double*)src.data)[(src.rows - 1) + col / 2];
-	}
-}
-*/
-
-
-/*************************************************
-Function:    downSample
-Description: // Down sample the input image and convert its result to the output image
-Inputs:      // src, input gray image and its bit depth is CV_64F
-			 // dst, output image
-**************************************************/
  Mat<float> mySIFT::downSample(const Mat<float>& src){
-	// Determine the type of input image
+	 // Determine the type of input image
 	if (src.channels() != 1){
 		cout << "The input image is not a gray image." << endl;
 		return src;
@@ -178,78 +79,61 @@ Inputs:      // src, input gray image and its bit depth is CV_64F
 
 	for (int dstX = 0; dstX < dst.rows(); dstX++){
 		for (int dstY = 0; dstY < dst.cols(); dstY++){
-			/*double sum = ((double*)src.data)[(dstX * 2)* src.cols + (dstY * 2)]
-				+ ((double*)src.data)[(dstX * 2 + 1)* src.cols + (dstY * 2)]
-				+ ((double*)src.data)[(dstX * 2)* src.cols + (dstY * 2 + 1)]
-				+ ((double*)src.data)[(dstX * 2 + 1)* src.cols + (dstY * 2 + 1)];
-			((double*)dst.data)[dstX * dst.cols + dstY] = sum / 4.0;*/
 			float sum = (src.at(dstX * 2, dstY * 2) + src.at(dstX * 2 + 1, dstY * 2)
 				+ src.at(dstX * 2, dstY * 2 + 1) + src.at(dstX * 2 + 1, dstY * 2 + 1));
 			dst.at(dstX, dstY) = sum / 4.0f;
 		}
 	}
-//	print_debug("down sample\n") ;
+	
 	return dst;
 }
 
-
-/*************************************************
-Function:    convolve
-Description: // Convolution of the input image with the filter
-Inputs:      // src, input gray image and its bit depth is CV_64F
-			 // filter
-			 // dst, output image
-			 // a, the width of the filter
-			 // b, the height of the filter
-**************************************************/
 void mySIFT::convolve(const Mat<float>& src, double filter[], Mat<float>& dst, int a, int b){
 	// Initialization
 	dst = src.clone();
-//	print_debug("start padding!\n");
+	
 	// Padding
-	//Mat srcPadding = cvCreateMat(src.rows + 2 * a, src.cols + 2 * b, CV_64F);
+	 
 	Mat<float> srcPadding(src.rows() + 2 * a, src.cols() + 2 * b, 1);
-	for(int x = 0; x < srcPadding.rows(); x++){
+/*	for(int x = 0; x < srcPadding.rows(); x++){
 		for(int y = 0; y < srcPadding.cols(); y++){
-			/*if(y >= (src.cols + b - 1 ) || x >= ( src.rows + a - 1))
-				((double*)srcPadding.data)[x * srcPadding.cols + y] = 0.0;
-			else if((y <= b ) || x <= a)
-				((double*)srcPadding.data)[x * srcPadding.cols + y] = 0.0;
-			else
-				((double*)srcPadding.data)[x * srcPadding.cols + y] = ((double*)src.data)[(x - a) * src.cols + y - b];*/
 			if(y > (src.cols() + b - 1) || x > (src.rows() + a - 1) || x <= a || y <=b)
 				srcPadding.at(x, y) = 0.0;
 			else
 				srcPadding.at(x, y) = src.at(x - a, y - b);
 		}
 	}
-//	print_debug("padding" );
-
+*/	 
 	int filterSize = min(2 * a + 1, 2 * b + 1);
 
+ /*
 	for(int x = a; x < srcPadding.rows() - a; x++){
 		for(int y = b; y < srcPadding.cols() - b; y++){
 			double sum = 0.0;
 			for(int s = -a; s <= a; s++){
 				for(int t = -b; t <= b; t++){
 					sum += filter[(s + a) * filterSize + (t + b)] * srcPadding.at(x + s, y + t);	
-			//* ((double*)srcPadding.data)[(x + s) * srcPadding.cols + (y + t)];
 				}
 			}
-			//((double*)dst.data)[(x - a) * dst.cols + (y - b)] = sum;
 			dst.at(x - a, y - b) = sum;
 		}
 	} 
-//	print_debug("convolve" );
+*/	 
+	
+	for(int x = a; x < src.rows() - a; x++){
+ 		for(int y = b; y < src.cols() - b; y++){
+ 			float sum = 0.0;
+ 			for(int s = -a; s <= a; s++){
+ 				for(int t = -b; t <= b; t++){
+ 					sum += filter[(s + a) * filterSize + (t + b)] * src.at(x + s, y + t);
+ 							
+ 				}
+ 			}
+ 			dst.at(x , y) = sum;
+ 		}
+ 	}
 }
 
-/*************************************************
-Function:    gaussianSmoothing
-Description: // Gaussian Smoothing of the input image
-Inputs:      // src, input gray image and its bit depth is CV_64F
-			 // dst, output image
-			 // sigma
-**************************************************/
 void mySIFT::gaussianSmoothing(const Mat<float>& src, Mat<float>& dst, double sigma){
 	// Generate the gaussian mask
 	GaussianMask gaussianMask(sigma);
@@ -260,15 +144,6 @@ void mySIFT::gaussianSmoothing(const Mat<float>& src, Mat<float>& dst, double si
 	convolve(dstCx, filter, dst, 0, filterSize / 2);
 }
 
-
-/*************************************************
-Function:    Subtraction
-Description: // Calculate the difference, the first input image sub the second image
-Inputs:      // src1, input gray image and its bit depth is CV_64F
-			 // src2
-			 // dst, output image
-			 // sigma
-**************************************************/
 void mySIFT::subtraction(const Mat<float>& src1, const Mat<float>& src2, Mat<float>& dst){
 	if (src1.cols() != src2.cols() || src1.rows() != src2.rows()){
 		cout << "The sizes are not same." << endl;
@@ -277,36 +152,20 @@ void mySIFT::subtraction(const Mat<float>& src1, const Mat<float>& src2, Mat<flo
 	dst = src1.clone();
 	for (int x = 0; x < src1.rows(); x++){
 		for (int y = 0; y < src1.cols(); y++){
-			/*((double*)dst.data)[x * dst.cols + y] = ((double*)src1.data)[x * src1.cols + y]
-				- ((double*)src2.data)[x * src2.cols + y];*/
-			dst.at(x,y) = src1.at(x,y) - src2.at(x,y);
+//			dst.at(x,y) = ((src1.at(x,y) - src2.at(x,y)) > 0 ? (src1.at(x,y) - src2.at(x,y)) : (src2.at(x,y) - src1.at(x,y)));
+			dst.at(x,y) = src1.at(x, y) - src2.at(x,y);
 		}
 	}
-//	print_debug("sub");
 }
 
-
-/*************************************************
-Function:    generateGaussianPyramid
-Description: // generate the Gaussian Pyramid
-Inputs:      // src, input gray image and its bit depth is CV_64F
-		     // octaves, the number of octaves
-			 // scale, the height of scale space
-			 // sigma, the parameter of Gaussian
-Outputs:	 // 1D vector of Gaussian Pyramid
-**************************************************/  
 Mat<float>* mySIFT::generateGaussianPyramid(Mat<float>& src, int octaves, int scales, double sigma){
 	double k = pow(2, (1 / (double)this->scale));
 	int intervalGaus = scale + 3;
 
 	Mat<float>* gaussPyr = new Mat<float>[octaves * intervalGaus];
 
-	// Convert to Gray image and Up sample 
-	//Mat<float> initGrayImg , initUpSampling;
 	Mat<float> initGrayImg = convertRGBToGray(src);
-	//upSample(initGrayImg, initUpSampling);
-
-	// Generate a list of series of sigma
+	
 	double *sigmas = new double[intervalGaus];
 	sigmas[0] = sigma;
 	for(int i = 1; i < intervalGaus; i++){
@@ -323,7 +182,7 @@ Mat<float>* mySIFT::generateGaussianPyramid(Mat<float>& src, int octaves, int sc
 			else
 				this->sigma[i*intervalGaus + j] = this->sigma[i*intervalGaus + j - 1] * k;
 		}
-
+	
 	// Generate smoothing images in the first octave
 	for (int i = 0; i < intervalGaus; i++){
 		Mat<float> smoothing;
@@ -348,20 +207,24 @@ Mat<float>* mySIFT::generateGaussianPyramid(Mat<float>& src, int octaves, int sc
 		}
 
 	} 
-	 
+	//write_rgb("gaus16.jpg",gaussPyr[16]);
+	int n = gaussPyr[15].pixels();
+	vector<unsigned char> img(n*4);
+	const float* p = gaussPyr[15].ptr();
+	unsigned char* data = img.data();
+	REP(i,n){
+		data[0] = data[1] = data[2] = ((p[0] < 0) ? 1 : p[0]) * 255;
+		data[3] = 255;
+		data += 4;
+		p += 1;
+	}
+	unsigned error = lodepng::encode("gauss15.png",img, gaussPyr[15].width(), gaussPyr[15].height());
+	if(error)
+		error_exit(ssprintf("png encode error %u: %s", error, lodepng_error_text(error)));
+
 	return gaussPyr;
 }
 
-
-/*************************************************
-Function:    generateDoGPyramid
-Description: // generate the DoG Pyramid
-Inputs:      // src, input gray image and its bit depth is CV_64F
-			 // octaves, the number of octaves
-			 // scale, the height of scale space
-			 // sigma, the parameter of Gaussian
-Outputs:	 // 1D vector of DoG Pyramid
-**************************************************/ 
 Mat<float>* mySIFT::generateDoGPyramid(Mat<float>* gaussPyr, int octaves, int scales, double sigma){
 	int intervalDoGs = scale + 2;
 	int intervalGaus = scale + 3;
@@ -369,24 +232,51 @@ Mat<float>* mySIFT::generateDoGPyramid(Mat<float>* gaussPyr, int octaves, int sc
 
 	for(int i = 0; i < octaves; i++){
 		for(int j = 0; j < intervalDoGs; j++){
-			int number = i * intervalGaus + j;
 			Mat<float> subImg;
 			subtraction(gaussPyr[i * intervalGaus + j + 1], gaussPyr[i * intervalGaus + j], subImg);
 			dogPyr[i * intervalDoGs + j] = subImg;
 		}
 	}
+//	write_rgb("dog13.jpg",dogPyr[13]);
+	int n = dogPyr[13].pixels();
+	vector<unsigned char> img(n*4);
+	const float* p = dogPyr[13].ptr();
+	unsigned char* data = img.data();
+	REP(i,n){
+		data[0] = data[1] = data[2] =(unsigned char)(((p[0] < 0) ? (-p[0]) : p[0]) * 2000.0) ;
+		data[3] = 255;
+		data += 4;
+		p += 1;
+	}
+	unsigned error = lodepng::encode("dog13.png",img, dogPyr[13].width(), dogPyr[13].height());
+	if(error)
+		error_exit(ssprintf("png encode error %u: %s", error, lodepng_error_text(error)));
 
-
+	n = dogPyr[3].pixels();
+	vector<unsigned char> img3(n*4);
+	const float* p3 = dogPyr[3].ptr();
+	unsigned char* data3 = img3.data();
+	float min = 999.0;
+	REP(i,n){
+		if(min > p3[0]) min = p3[0];
+		p3 += 1;
+	}
+	p3 = dogPyr[3].ptr();
+	REP(i,n){
+		data3[0] = data3[1] = data3[2] = (unsigned char)((p3[0] - min) * 1000.0);
+				 //=(unsigned char)(((p3[0] < 0) ? (-p3[0]) : p3[0]) * 2000.0) ;
+		data3[3] = 255;
+		data3 += 4;
+		p3 += 1;
+	}
+	unsigned error3 = lodepng::encode("dog3.png",img3, dogPyr[3].width(), dogPyr[3].height());
+	if(error3)
+		error_exit(ssprintf("png encode error %u: %s", error3, lodepng_error_text(error3)));
+	
 	return dogPyr;
+	
 }
 
-
-
-/*************************************************
-Function:   GaussianMask
-Description: // Constructor, Calculate the Gaussian mask
-Inputs:      // sigma
-**************************************************/
 GaussianMask::GaussianMask(double sigma){
 	double gaussianDieOff = 0.001;
 	vector<double> halfMask;
@@ -419,7 +309,6 @@ GaussianMask::GaussianMask(double sigma){
 }
 
 
-
 // detect features by finding extrema in DoG scale space
 vector<key_point> mySIFT::findKeypoints() {
 	vector<key_point> keyPoints;
@@ -430,16 +319,7 @@ vector<key_point> mySIFT::findKeypoints() {
 					if (isExtremum(o, i, r, c)) {
 						key_point kp;
 						if (interpolateExtrema(o, i, r, c, kp)) {
-						//if (kp.x != NULL) {
-							//key_point new_kp;
-							//new_kp.x = kp->x;
-							//new_kp.y = kp->y;
-							//new_kp.oct_id = kp->oct_id;
-							//new_kp.scale_id = kp->scale_id;
-							//new_kp.orientation = kp->orientation;
-							//new_kp.v = kp->v;
 							keyPoints.push_back(kp);
-							//print_debug("%lf,%lf\n",kp.x,kp.y);
 						}
 					}
 				}
@@ -447,7 +327,6 @@ vector<key_point> mySIFT::findKeypoints() {
 		}
 	
 	}
-	//print_debug("x=%lf,y=%lf",keyPoints[10].x,keyPoints[10].y);
 	return keyPoints;
 }
 
@@ -529,7 +408,7 @@ bool mySIFT::interpolateExtrema(int octave, int interval, int row, int column, k
 		/* The Hessian Matrix:
 		     /dxx dxy dxs\
 		    | dyx dyy dys |
-			 \dsx dsy dss/     */
+	        	 \dsx dsy dss/     */
 		hessian.at(0, 0) = dxx;
 		hessian.at(0, 1) = dxy;
 		hessian.at(0, 2) = dxs;
@@ -627,7 +506,6 @@ bool mySIFT::isEdge(int octave, int interval, int row, int column) {
 
 	return false;
 }
-
 
 
 void mySIFT::GetOriAndMag(int oct_id, int scale_id)
@@ -730,9 +608,7 @@ std::vector<double> mySIFT::OrientationAssignment(key_point p)
 			double b=(next-prev)*0.5;
 
 			double bin_real = i*1.0 - 0.5*b/a;
-
 			if(bin_real<0) bin_real+=36;
-
 			double orientation = bin_real * 10.0 / 180.0 * PI;
 			result.push_back(orientation);
 		}
@@ -774,14 +650,12 @@ void mySIFT::GetVector(key_point p)
 
 			double ori_loc = ori_img.at(y,x);
 			double mag_loc = mag_img.at(y,x);
-
 			double w_mag = mag_loc * exp( -(sqr(xx)+sqr(yy)) / 8 );
 			double r_ori = ori_loc -  ori;
 
 			if(r_ori<0) r_ori += 2*PI;
 
 			double bin_hist = r_ori /PI * 180.0 /45.0;
-
 			TriInterpolation(bin_x,bin_y,bin_hist,w_mag,hist);
 		}
 	}
@@ -810,7 +684,6 @@ void mySIFT::GetVector(key_point p)
 
 	Desc.emplace_back(move(d));
 }
-
 
 
 void mySIFT::TriInterpolation(double x, double y, double h, double w_mag, double hist[][8])
