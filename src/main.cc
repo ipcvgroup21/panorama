@@ -38,7 +38,7 @@ void test_extrema(const char* fname, int mode) {
 	//ScaleSpace ss(mat, NUM_OCTAVE, NUM_SCALE);
 	//DOGSpace dog(ss);
 	//ExtremaDetector ex(dog);
-	mySIFT mysift(mat, 3, 3, 1.6);
+	mySIFT mysift(mat, 3, 3, 1.0);
 
 	PlaneDrawer pld(mat);
 	if (mode == 0) {
@@ -49,9 +49,10 @@ void test_extrema(const char* fname, int mode) {
 	} else if (mode == 1) {
 		auto extrema = mysift.get_extrema();
 		cout << extrema.size() << endl;
-		print_debug("x = %d, y = %d", (int)extrema[0].x, (int)extrema[0].y);
+//		print_debug("x = %d, y = %d", (int)extrema[0].x * pow(2.0, (extrema[0].oct_id)),
+//						 (int)extrema[0].y * pow(2.0, (extrema[0].oct_id)));
 		for (auto &i : extrema) {
-			Coor c{(int)(i.x), (int)(i.y)};
+			Coor c{(int)(i.x * pow(2.0, i.oct_id)), (int)(i.y * pow(2.0, i.oct_id))};
 			pld.cross(c, LABEL_LEN / 2);
 		}
 	}
